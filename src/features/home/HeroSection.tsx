@@ -17,7 +17,7 @@ export function HeroSection() {
           <span className="text-gold-gradient">in one quiet workspace.</span>
         </h1>
         <p className="mt-6 max-w-xl text-sm leading-relaxed text-muted-foreground">
-          GrantAstraX replaces the tab-sprawl of converters, compressors, LaTeX editors and
+          GranthAstraX replaces the tab-sprawl of converters, compressors, LaTeX editors and
           print calculators with four precise desks — designed for focus, not noise.
         </p>
         <div className="mt-8 flex flex-wrap items-center gap-3">

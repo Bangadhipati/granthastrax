@@ -73,14 +73,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "GrantAstraX" },
+      { title: "GranthAstraX" },
       {
         name: "description",
         content:
-          "GrantAstraX — a premium studio for image and document conversion, LaTeX research writing and print-ready book design.",
+          "GranthAstraX — a premium studio for image and document conversion, LaTeX research writing and print-ready book design.",
       },
       { name: "author", content: "Debarghya Bhowmick" },
-      { property: "og:title", content: "GrantAstraX" },
+      { property: "og:title", content: "GranthAstraX" },
       {
         property: "og:description",
         content: "Convert, compress, write LaTeX visually and design print-ready books.",

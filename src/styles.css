@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * GrantAstraX design system — obsidian black, gold, bone white.
+ * GranthAstraX design system — obsidian black, gold, bone white.
  * All colors are oklch semantic tokens. Never hardcode colors in components.
  */
 
@@ -163,4 +163,19 @@
     linear-gradient(to right, oklch(0.81 0.13 84 / 6%) 1px, transparent 1px),
     linear-gradient(to bottom, oklch(0.81 0.13 84 / 6%) 1px, transparent 1px);
   background-size: 72px 72px;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }

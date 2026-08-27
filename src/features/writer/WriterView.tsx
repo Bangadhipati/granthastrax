@@ -52,7 +52,7 @@ export function WriterView() {
       <PageHeader
         eyebrow="Writer Desk"
         title="Print-ready, before you print."
-        description="Set the physical specification of your book and GrantAstraX derives the spine, the bleed and a matching interior template."
+        description="Set the physical specification of your book and GranthAstraX derives the spine, the bleed and a matching interior template."
       />
 
       <div className="mx-auto mt-12 grid max-w-7xl gap-6 px-6 lg:grid-cols-[1fr_1.15fr]">
@@ -167,7 +167,7 @@ export function WriterView() {
               >
                 <div className="flex h-full flex-col justify-between p-6">
                   <p className="text-[10px] uppercase tracking-[0.3em] text-primary-foreground/70">
-                    GrantAstraX Press
+                    GranthAstraX Press
                   </p>
                   <div>
                     <p className="font-display text-2xl leading-tight text-primary-foreground">

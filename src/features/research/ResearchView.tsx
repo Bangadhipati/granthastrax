@@ -1,4 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import CodeMirror, { ReactCodeMirrorRef } from '@uiw/react-codemirror';
+import { EditorView } from '@codemirror/view';
+
+import { Document, Page, pdfjs } from "react-pdf";
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
 
 import { FontSize } from "./extensions/FontSize";
 import { Columns } from "./extensions/Columns";
@@ -16,7 +25,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/componen
 import { Columns as ColumnsIcon, Heading1, Heading2, Heading3, Type, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, AlignJustify, ListOrdered, Image as ImageIcon, GripVertical } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import { Plus, ArrowLeft, Download, Bold, Italic, Sigma, List, Table2, Quote, FileArchive, FileText, File, ZoomIn, ZoomOut, Maximize2, Play } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Plus, ArrowLeft, Download, Bold, Italic, Sigma, List, Table2, Quote, FileArchive, FileText, File, ZoomIn, ZoomOut, Maximize2, Play } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { EditorShell } from "@/components/layout/EditorShell";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -189,13 +198,39 @@ function ToolbarButton({
   );
 }
 
-function Editor({ onBack }: { onBack: () => void }) {
-  const [htmlContent, setHtmlContent] = useState(`<h2>Graph Attention for Protein Folding</h2><p>Debarghya Bhowmick</p><p><strong>Abstract — </strong>We introduce a sparse attention formulation that reduces folding error by 14.2% on CASP15.</p><h3>1. Introduction</h3><p>Protein structure prediction remains a central problem in computational biology.</p>`);
-  const [latexContent, setLatexContent] = useState(latex);
-  const [lastEdited, setLastEdited] = useState<"html" | "latex">("html");
 
+function Editor({ onBack }: { onBack: () => void }) {
+  const [latexContent, setLatexContent] = useState(`\\\\documentclass{article}
+\\\\usepackage[utf8]{inputenc}
+\\\\usepackage{amsmath}
+\\\\usepackage{geometry}
+\\\\geometry{a4paper, margin=1in}
+
+\\\\title{Graph Attention for Protein Folding}
+\\\\author{Debarghya Bhowmick}
+\\\\date{}
+
+\\\\begin{document}
+
+\\\\maketitle
+
+\\\\begin{abstract}
+We introduce a sparse attention formulation that reduces folding error by 14.2\\\\% on CASP15.
+\\\\end{abstract}
+
+\\\\section{Introduction}
+Protein structure prediction remains a central problem in computational biology.
+
+\\\\end{document}`);
+
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [isCompiling, setIsCompiling] = useState(false);
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pageNumber, setPageNumber] = useState<number>(1);
   const [latexZoom, setLatexZoom] = useState(1);
   const [previewZoom, setPreviewZoom] = useState(1);
+  
+  const editorRef = useRef<ReactCodeMirrorRef>(null);
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
@@ -203,55 +238,56 @@ function Editor({ onBack }: { onBack: () => void }) {
         e.preventDefault();
       }
     };
-    
-    // Use a native event listener with passive: false to prevent browser default zoom
     document.addEventListener("wheel", handleWheel, { passive: false });
-    return () => {
-      document.removeEventListener("wheel", handleWheel);
-    };
+    return () => document.removeEventListener("wheel", handleWheel);
   }, []);
 
-  const handleCompile = () => {
-    if (lastEdited === "html") {
-      setLatexContent(convertHtmlToLatex(htmlContent));
-    } else {
-      setHtmlContent(convertLatexToHtml(latexContent));
+    const handleCompile = async () => {
+    setIsCompiling(true);
+    try {
+      const formData = new FormData();
+      formData.append("filecontents[]", latexContent);
+      formData.append("filename[]", "document.tex");
+      formData.append("engine", "pdflatex");
+      formData.append("return", "pdf");
+
+      const res = await fetch("https://texlive.net/cgi-bin/latexcgi", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (res.ok) {
+        const blob = await res.blob();
+        setPdfUrl(URL.createObjectURL(blob));
+        setPageNumber(1);
+      } else {
+        alert("Compilation failed. Please check your LaTeX syntax.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Failed to reach compiler API.");
+    } finally {
+      setIsCompiling(false);
     }
   };
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      UnderlineExtension,
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
-      ImageExtension,
-      TextStyle,
-      FontFamily,
-    ],
-    content: htmlContent,
-    editorProps: {
-      attributes: {
-        class: "prose max-w-none focus:outline-none min-h-[500px]",
-      },
-    },
-    onUpdate: ({ editor }) => {
-      setHtmlContent(editor.getHTML());
-      setLastEdited("html");
-    },
-  });
+  function insertTag(startTag: string, endTag: string = "") {
+    if (!editorRef.current?.view) return;
+    const view = editorRef.current.view;
+    const { from, to } = view.state.selection.main;
+    const selectedText = view.state.sliceDoc(from, to);
+    const newText = startTag + selectedText + endTag;
+    
+    view.dispatch({
+      changes: { from, to, insert: newText },
+      selection: { anchor: from + startTag.length, head: from + startTag.length + selectedText.length }
+    });
+    view.focus();
+  }
 
-  useEffect(() => {
-    if (editor && htmlContent !== editor.getHTML()) {
-      editor.commands.setContent(htmlContent);
-    }
-  }, [htmlContent, editor]);
-
-  const addImage = () => {
-    const url = window.prompt("Enter image URL");
-    if (url && editor) {
-      editor.chain().focus().setImage({ src: url }).run();
-    }
-  };
+  function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
+    setNumPages(numPages);
+  }
 
   return (
     <EditorShell>
@@ -270,113 +306,76 @@ function Editor({ onBack }: { onBack: () => void }) {
             <ArrowLeft className="size-3.5" /> Back to projects
           </button>
           
-          {editor && (
-            <div className="flex flex-1 items-center justify-center gap-1.5 px-4 overflow-x-auto no-scrollbar">
-              
-              
-              <Select
-                onValueChange={(val) => {
-                  if (val === "p") editor.chain().focus().setParagraph().run();
-                  else editor.chain().focus().toggleHeading({ level: parseInt(val) as any }).run();
-                }}
-              >
-                <SelectTrigger className="w-[110px] h-8 text-xs border-border bg-background">
-                  <SelectValue placeholder="Heading" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="p">Paragraph</SelectItem>
-                  <SelectItem value="1">Heading 1</SelectItem>
-                  <SelectItem value="2">Heading 2</SelectItem>
-                  <SelectItem value="3">Heading 3</SelectItem>
-                </SelectContent>
-              </Select>
+          <div className="flex flex-1 items-center justify-center gap-1.5 px-4 overflow-x-auto no-scrollbar">
+            <Select onValueChange={(val) => insertTag(`\\${val}{`, '}')}>
+              <SelectTrigger className="w-[110px] h-8 text-xs border-border bg-background">
+                <SelectValue placeholder="Heading" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="section">Heading 1</SelectItem>
+                <SelectItem value="subsection">Heading 2</SelectItem>
+                <SelectItem value="subsubsection">Heading 3</SelectItem>
+              </SelectContent>
+            </Select>
 
-              <Select
-                onValueChange={(val) => editor.chain().focus().setFontSize(val).run()}
-              >
-                <SelectTrigger className="w-[80px] h-8 text-xs border-border bg-background">
-                  <SelectValue placeholder="Size" />
-                </SelectTrigger>
-                <SelectContent>
-                  {fontSizes.map((size) => (
-                    <SelectItem key={size} value={size}>
-                      {size}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <Select onValueChange={(val) => insertTag(`{\\fontsize{${val}}{${parseInt(val)+2}}\\selectfont `, '}')}>
+              <SelectTrigger className="w-[80px] h-8 text-xs border-border bg-background">
+                <SelectValue placeholder="Size" />
+              </SelectTrigger>
+              <SelectContent>
+                {["10", "12", "14", "16", "18", "20", "24"].map((size) => (
+                  <SelectItem key={size} value={size}>{size}pt</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-              <Select
-                onValueChange={(val) => editor.chain().focus().setColumns(parseInt(val)).run()}
-              >
-                <SelectTrigger className="w-[110px] h-8 text-xs border-border bg-background">
-                  <div className="flex items-center gap-2">
-                    <ColumnsIcon className="size-3.5 text-muted-foreground" />
-                    <SelectValue placeholder="Columns" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">1 Column</SelectItem>
-                  <SelectItem value="2">2 Columns</SelectItem>
-                  <SelectItem value="3">3 Columns</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="h-4 w-px bg-border mx-1" />
 
-              <Select
-                onValueChange={(val) => editor.chain().focus().setFontFamily(val).run()}
-              >
-                <SelectTrigger className="w-[130px] h-8 text-xs border-border bg-background">
-                  <SelectValue placeholder="Font Style" />
-                </SelectTrigger>
-                <SelectContent>
-                  {fonts.map((f) => (
-                    <SelectItem key={f.name} value={f.value} style={{ fontFamily: f.value }}>
-                      {f.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <div className="h-4 w-px bg-border mx-1" />
-
-              <div className="flex items-center rounded-md border border-border bg-background p-0.5">
-                <ToolbarButton isActive={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()} icon={Bold} />
-                <ToolbarButton isActive={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()} icon={Italic} />
-                <ToolbarButton isActive={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()} icon={UnderlineIcon} />
-              </div>
-
-              <div className="h-4 w-px bg-border mx-1" />
-
-              <div className="flex items-center rounded-md border border-border bg-background p-0.5 hidden sm:flex">
-                <ToolbarButton isActive={editor.isActive({ textAlign: "left" })} onClick={() => editor.chain().focus().setTextAlign("left").run()} icon={AlignLeft} />
-                <ToolbarButton isActive={editor.isActive({ textAlign: "center" })} onClick={() => editor.chain().focus().setTextAlign("center").run()} icon={AlignCenter} />
-                <ToolbarButton isActive={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()} icon={AlignRight} />
-                <ToolbarButton isActive={editor.isActive({ textAlign: "justify" })} onClick={() => editor.chain().focus().setTextAlign("justify").run()} icon={AlignJustify} />
-              </div>
-
-              <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
-
-              <div className="flex items-center rounded-md border border-border bg-background p-0.5">
-                <ToolbarButton isActive={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()} icon={List} />
-                <ToolbarButton isActive={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()} icon={ListOrdered} />
-              </div>
-
-              <div className="h-4 w-px bg-border mx-1" />
-              
-              <div className="flex items-center rounded-md border border-border bg-background p-0.5">
-                <ToolbarButton onClick={addImage} icon={ImageIcon} />
-              </div>
-
+            <div className="flex items-center rounded-md border border-border bg-background p-0.5">
+              <ToolbarButton onClick={() => insertTag('\\textbf{', '}')} icon={Bold} />
+              <ToolbarButton onClick={() => insertTag('\\textit{', '}')} icon={Italic} />
+              <ToolbarButton onClick={() => insertTag('\\underline{', '}')} icon={UnderlineIcon} />
             </div>
-          )}
+
+            <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
+
+            <div className="flex items-center rounded-md border border-border bg-background p-0.5">
+              <ToolbarButton onClick={() => insertTag('\\begin{center}\\n', '\\n\\end{center}')} icon={AlignCenter} />
+              <ToolbarButton onClick={() => insertTag('\\begin{flushleft}\\n', '\\n\\end{flushleft}')} icon={AlignLeft} />
+              <ToolbarButton onClick={() => insertTag('\\begin{flushright}\\n', '\\n\\end{flushright}')} icon={AlignRight} />
+            </div>
+
+            <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
+
+            <div className="flex items-center rounded-md border border-border bg-background p-0.5">
+              <ToolbarButton onClick={() => insertTag('\\begin{itemize}\\n\\item ', '\\n\\end{itemize}')} icon={List} />
+              <ToolbarButton onClick={() => insertTag('\\begin{enumerate}\\n\\item ', '\\n\\end{enumerate}')} icon={ListOrdered} />
+            </div>
+            
+            <div className="h-4 w-px bg-border mx-1" />
+
+            <div className="flex items-center rounded-md border border-border bg-background p-0.5">
+              <ToolbarButton onClick={() => {
+                const url = window.prompt("Enter Image URL");
+                if (url) insertTag(`\\begin{figure}[h]\\n\\centering\\n\\includegraphics[width=0.5\\textwidth]{${url}}\\n\\caption{`, `}\\n\\end{figure}`);
+              }} icon={ImageIcon} />
+              <ToolbarButton onClick={() => {
+                const cols = window.prompt("Number of columns? (1 or 2)");
+                if (cols === "2") insertTag('\\twocolumn\\n');
+                else insertTag('\\onecolumn\\n');
+              }} icon={ColumnsIcon} />
+            </div>
+          </div>
           
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleCompile}
-              className="inline-flex items-center gap-2 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-black transition-opacity duration-300 hover:opacity-90"
+              disabled={isCompiling}
+              className="inline-flex items-center gap-2 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-black transition-opacity duration-300 hover:opacity-90 disabled:opacity-50"
             >
-              <Play className="size-3.5 fill-current" /> Compile
+              {isCompiling ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 fill-current" />} 
+              {isCompiling ? "Compiling..." : "Compile"}
             </button>
             <button
               type="button"
@@ -394,49 +393,115 @@ function Editor({ onBack }: { onBack: () => void }) {
             <ResizablePanel defaultSize={40} minSize={20} className="flex h-full flex-col bg-[#0a0a0a]">
               <div className="flex shrink-0 items-center justify-between border-b border-border bg-background/40 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                 <span>main.tex</span>
-                <span className="text-gold">LaTeX</span>
+                <span className="text-gold">Source</span>
               </div>
               <div 
                 className="flex-1 overflow-hidden relative"
                 onWheel={(e) => {
                   if (e.ctrlKey || e.metaKey) {
-                    setLatexZoom((z) => Math.min(Math.max(0.5, z - e.deltaY * 0.005), 3));
+                    setLatexZoom((z) => Math.min(Math.max(0.5, z - e.deltaY * 0.001), 3));
                   }
                 }}
               >
-                <div style={{ transform: `scale(${latexZoom})`, transformOrigin: 'top left', width: `${100 / latexZoom}%`, height: `${100 / latexZoom}%` }}>
-                  <textarea
+                <CodeMirror
+                    ref={editorRef}
                     value={latexContent}
-                    onChange={(e) => {
-                      setLatexContent(e.target.value);
-                      setLastEdited("latex");
+                    onChange={(value) => setLatexContent(value)}
+                    theme="dark"
+                    height="100%"
+                    className="h-full w-full border-none bg-transparent font-mono outline-none"
+                    extensions={[EditorView.theme({ "&": { fontSize: `${13 * latexZoom}px` } })]}
+                    basicSetup={{
+                      lineNumbers: true,
+                      highlightActiveLine: false,
+                      foldGutter: false,
+                      dropCursor: false,
+                      allowMultipleSelections: false,
+                      indentOnInput: false,
                     }}
-                    spellCheck={false}
-                    className="h-full w-full resize-none border-none bg-transparent p-6 font-mono text-[12px] leading-relaxed text-muted-foreground outline-none focus:ring-0"
                   />
-                </div>
               </div>
             </ResizablePanel>
 
             <ResizableHandle withHandle className="bg-border hover:bg-gold/50 transition-colors z-10 w-1">
-              </ResizableHandle>
+            </ResizableHandle>
 
-            {/* WYSIWYG Pane */}
-            <ResizablePanel defaultSize={60} minSize={30} className="flex h-full flex-col bg-background">
+            {/* PDF Viewer Pane */}
+            <ResizablePanel defaultSize={60} minSize={30} className="flex h-full flex-col bg-background relative">
               <div className="flex shrink-0 items-center justify-between border-b border-border bg-background/40 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                <span>Live preview</span>
-                <span className="text-gold">Editable</span>
+                <span>PDF Preview</span>
+                
+                {/* Zoom Controls */}
+                <div className="flex items-center gap-2 border-r border-border pr-4 mr-4">
+                  <button onClick={() => setPreviewZoom(z => Math.max(0.2, z - 0.2))} className="text-muted-foreground hover:text-foreground">
+                    <ZoomOut className="size-4" />
+                  </button>
+                  <span className="font-medium text-foreground w-8 text-center">{Math.round(previewZoom * 100)}%</span>
+                  <button onClick={() => setPreviewZoom(z => Math.min(5, z + 0.2))} className="text-muted-foreground hover:text-foreground">
+                    <ZoomIn className="size-4" />
+                  </button>
+                </div>
+                
+                {/* Pagination Controls */}
+                {pdfUrl && numPages > 0 && (
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setPageNumber(p => Math.max(1, p - 1))}
+                      disabled={pageNumber <= 1}
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </button>
+                    <span className="font-medium text-foreground">
+                      Page {pageNumber} of {numPages}
+                    </span>
+                    <button 
+                      onClick={() => setPageNumber(p => Math.min(numPages, p + 1))}
+                      disabled={pageNumber >= numPages}
+                      className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    >
+                      <ChevronRight className="size-4" />
+                    </button>
+                  </div>
+                )}
               </div>
+
               <div 
                 className="flex-1 overflow-auto bg-muted/30 p-8 lg:p-12 relative flex justify-center items-start"
                 onWheel={(e) => {
                   if (e.ctrlKey || e.metaKey) {
-                    setPreviewZoom((z) => Math.min(Math.max(0.5, z - e.deltaY * 0.005), 3));
+                    setPreviewZoom((z) => Math.min(Math.max(0.2, z - e.deltaY * 0.001), 5));
                   }
                 }}
               >
-                <div style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top center' }} className="w-[210mm] min-h-[297mm] bg-white p-12 shadow-xl ring-1 ring-border/20 text-black shrink-0">
-                  {editor && <EditorContent editor={editor} />}
+                <div>
+                  {isCompiling ? (
+                    <div className="flex h-[400px] w-[210mm] items-center justify-center bg-white shadow-xl">
+                      <div className="flex flex-col items-center gap-4 text-muted-foreground">
+                        <Loader2 className="size-8 animate-spin text-gold" />
+                        <p>Compiling LaTeX via API...</p>
+                      </div>
+                    </div>
+                  ) : pdfUrl ? (
+                    <Document
+                      file={pdfUrl}
+                      onLoadSuccess={onDocumentLoadSuccess}
+                      loading={<div className="flex h-[400px] w-[210mm] items-center justify-center bg-white shadow-xl"><Loader2 className="size-8 animate-spin text-gold" /></div>}
+                      className="shadow-xl"
+                    >
+                      <Page 
+                        pageNumber={pageNumber} 
+                        renderTextLayer={false} 
+                        renderAnnotationLayer={false}
+                        className="bg-white"
+                        scale={previewZoom * 1.3}
+                      />
+                    </Document>
+                  ) : (
+                    <div className="flex h-[297mm] w-[210mm] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground/60">
+                      <p>Click "Compile" to generate PDF</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </ResizablePanel>
@@ -446,4 +511,5 @@ function Editor({ onBack }: { onBack: () => void }) {
     </EditorShell>
   );
 }
+
 

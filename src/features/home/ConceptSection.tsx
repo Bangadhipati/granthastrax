@@ -9,7 +9,7 @@ export function ConceptSection() {
               Word-simple on the surface. LaTeX-exact underneath.
             </h2>
             <p className="mt-5 text-sm leading-relaxed text-muted-foreground">
-              Most researchers think in prose and formatting, not in markup. GrantAstraX lets you
+              Most researchers think in prose and formatting, not in markup. GranthAstraX lets you
               write in a familiar rich-text preview while clean, submission-ready LaTeX is
               generated beside you — then exports to PDF, DOCX or TeX in a click.
             </p>
