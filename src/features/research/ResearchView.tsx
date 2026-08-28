@@ -1,9 +1,7 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useRef } from "react";
 import CodeMirror, { ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { EditorView } from '@codemirror/view';
-
-// Lazy-load PdfViewer so react-pdf/pdfjs-dist never runs during SSR
-const PdfViewer = lazy(() => import("./PdfViewer").then(m => ({ default: m.PdfViewer })));
+import { PdfViewer } from "./PdfViewer";
 
 
 
@@ -473,12 +471,6 @@ Protein structure prediction remains a central problem in computational biology.
                 }}
               >
                 <div>
-                  <Suspense fallback={
-                    <div className="flex h-[297mm] w-[210mm] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground/60">
-                      <Loader2 className="size-8 animate-spin text-gold" />
-                      <p className="mt-4">Loading PDF viewer...</p>
-                    </div>
-                  }>
                     <PdfViewer
                       pdfUrl={pdfUrl}
                       isCompiling={isCompiling}
@@ -486,7 +478,6 @@ Protein structure prediction remains a central problem in computational biology.
                       previewZoom={previewZoom}
                       onLoadSuccess={onDocumentLoadSuccess}
                     />
-                  </Suspense>
                 </div>
               </div>
             </ResizablePanel>
