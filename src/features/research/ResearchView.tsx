@@ -1,12 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import CodeMirror, { ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { EditorView } from '@codemirror/view';
 
-import { Document, Page, pdfjs } from "react-pdf";
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
+// Lazy-load PdfViewer so react-pdf/pdfjs-dist never runs during SSR
+const PdfViewer = lazy(() => import("./PdfViewer").then(m => ({ default: m.PdfViewer })));
 
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 
 import { FontSize } from "./extensions/FontSize";
@@ -475,33 +473,20 @@ Protein structure prediction remains a central problem in computational biology.
                 }}
               >
                 <div>
-                  {isCompiling ? (
-                    <div className="flex h-[400px] w-[210mm] items-center justify-center bg-white shadow-xl">
-                      <div className="flex flex-col items-center gap-4 text-muted-foreground">
-                        <Loader2 className="size-8 animate-spin text-gold" />
-                        <p>Compiling LaTeX via API...</p>
-                      </div>
-                    </div>
-                  ) : pdfUrl ? (
-                    <Document
-                      file={pdfUrl}
-                      onLoadSuccess={onDocumentLoadSuccess}
-                      loading={<div className="flex h-[400px] w-[210mm] items-center justify-center bg-white shadow-xl"><Loader2 className="size-8 animate-spin text-gold" /></div>}
-                      className="shadow-xl"
-                    >
-                      <Page 
-                        pageNumber={pageNumber} 
-                        renderTextLayer={false} 
-                        renderAnnotationLayer={false}
-                        className="bg-white"
-                        scale={previewZoom * 1.3}
-                      />
-                    </Document>
-                  ) : (
+                  <Suspense fallback={
                     <div className="flex h-[297mm] w-[210mm] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground/60">
-                      <p>Click "Compile" to generate PDF</p>
+                      <Loader2 className="size-8 animate-spin text-gold" />
+                      <p className="mt-4">Loading PDF viewer...</p>
                     </div>
-                  )}
+                  }>
+                    <PdfViewer
+                      pdfUrl={pdfUrl}
+                      isCompiling={isCompiling}
+                      pageNumber={pageNumber}
+                      previewZoom={previewZoom}
+                      onLoadSuccess={onDocumentLoadSuccess}
+                    />
+                  </Suspense>
                 </div>
               </div>
             </ResizablePanel>
