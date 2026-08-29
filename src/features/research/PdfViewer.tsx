@@ -49,7 +49,7 @@ export function PdfViewer({
   if (isCompiling) {
     return (
       <div 
-        className="flex h-[297mm] w-[210mm] items-center justify-center bg-white shadow-xl transition-transform duration-75 origin-top animate-pulse"
+        className="flex shrink-0 h-[297mm] w-[210mm] items-center justify-center bg-white shadow-xl transition-transform duration-75 origin-top animate-pulse"
         style={{ transform: `scale(${previewZoom})` }}
       >
         <div className="flex flex-col items-center gap-4 text-muted-foreground">
@@ -87,7 +87,7 @@ export function PdfViewer({
   if (pdfUrl) {
     return (
       <div 
-        className="transition-transform duration-75 origin-top"
+        className="shrink-0 transition-transform duration-75 origin-top"
         style={{ transform: `scale(${previewZoom})` }}
       >
         <Document
@@ -117,7 +117,7 @@ export function PdfViewer({
 
   return (
     <div 
-      className="flex h-[297mm] w-[210mm] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground transition-transform duration-75 origin-top"
+      className="flex shrink-0 h-[297mm] w-[210mm] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground transition-transform duration-75 origin-top"
       style={{ transform: `scale(${previewZoom})` }}
     >
       <div className="flex flex-col items-center gap-3 opacity-50">
