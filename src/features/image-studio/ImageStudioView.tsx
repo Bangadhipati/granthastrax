@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { UploadCloud, Repeat, Minimize2, Maximize2, FileDown, Loader2, Info } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { UploadCloud, Repeat, Minimize2, Maximize2, FileDown, Loader2, Info, Clock, Download } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Panel } from "@/components/layout/Panel";
@@ -9,6 +9,14 @@ import { api } from "@/lib/api";
 
 const formats = ["PNG", "JPG", "WEBP", "AVIF", "TIFF", "SVG", "PDF"];
 
+interface ProcessedImage {
+  id: string;
+  originalName: string;
+  filename: string;
+  downloadUrl: string;
+  expiresAt: number;
+}
+
 export function ImageStudioView() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -16,9 +24,20 @@ export function ImageStudioView() {
   const [quality, setQuality] = useState([80]);
   const [scale, setScale] = useState([1]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [history, setHistory] = useState<ProcessedImage[]>([]);
+  const [now, setNow] = useState(Date.now());
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Live countdown timer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+      // Auto-remove expired items from the list
+      setHistory(prev => prev.filter(item => item.expiresAt > Date.now()));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleFileSelect = (selectedFile: File) => {
     if (!selectedFile.type.startsWith('image/')) {
@@ -27,7 +46,6 @@ export function ImageStudioView() {
     }
     setFile(selectedFile);
     setPreviewUrl(URL.createObjectURL(selectedFile));
-    setDownloadUrl(null); // Reset previous downloads
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -55,7 +73,6 @@ export function ImageStudioView() {
     }
 
     setIsProcessing(true);
-    setDownloadUrl(null);
 
     const formData = new FormData();
     formData.append("image", file);
@@ -68,16 +85,26 @@ export function ImageStudioView() {
         headers: { "Content-Type": "multipart/form-data" }
       });
       
-      const { downloadUrl } = response.data;
+      const { downloadUrl, filename } = response.data;
       if (downloadUrl) {
         // Build the full absolute URL since api.ts uses the base URL
         const fullDownloadUrl = `${api.defaults.baseURL}${downloadUrl}`;
-        setDownloadUrl(fullDownloadUrl);
+        
+        // Add to history (expires in exactly 5 minutes)
+        const newItem: ProcessedImage = {
+          id: filename,
+          originalName: file.name,
+          filename: filename,
+          downloadUrl: fullDownloadUrl,
+          expiresAt: Date.now() + 5 * 60 * 1000 
+        };
+        
+        setHistory(prev => [newItem, ...prev]);
         
         // Auto-trigger download
         const link = document.createElement("a");
         link.href = fullDownloadUrl;
-        link.download = response.data.filename;
+        link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -219,32 +246,67 @@ export function ImageStudioView() {
               className="mt-3"
             />
           </Panel>
-
-          {downloadUrl && (
-            <Panel className="border-gold/30 bg-gold/5 flex flex-col gap-2">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 rounded-full bg-gold/20 p-1">
-                  <Info className="size-4 text-gold" strokeWidth={2} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gold">Success! Your file is ready.</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Your file was successfully processed and should have downloaded automatically. 
-                    It is safely stored on our servers for the next <b>5 minutes</b> before being automatically deleted.
-                  </p>
-                  <a 
-                    href={downloadUrl} 
-                    download
-                    className="mt-3 inline-flex text-xs font-medium text-gold hover:underline"
-                  >
-                    Click here to download it again
-                  </a>
-                </div>
-              </div>
-            </Panel>
-          )}
         </div>
       </div>
+
+      {history.length > 0 && (
+        <div className="mx-auto mt-6 max-w-7xl px-6">
+          <Panel>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium flex items-center gap-2">
+                <Clock className="size-4 text-gold" />
+                Processed Images
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Files are automatically permanently deleted after 5 minutes.
+              </p>
+            </div>
+            <div className="border rounded-md overflow-hidden">
+              <table className="w-full text-sm text-left text-muted-foreground">
+                <thead className="text-xs text-foreground bg-muted/50 uppercase border-b">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Original File</th>
+                    <th className="px-4 py-3 font-medium">Result File</th>
+                    <th className="px-4 py-3 font-medium">Time Remaining</th>
+                    <th className="px-4 py-3 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((item) => {
+                    const timeLeft = Math.max(0, item.expiresAt - now);
+                    const minutes = Math.floor(timeLeft / 60000);
+                    const seconds = Math.floor((timeLeft % 60000) / 1000);
+                    const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    const isExpiringSoon = timeLeft < 60000;
+
+                    return (
+                      <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-3 truncate max-w-[200px]" title={item.originalName}>{item.originalName}</td>
+                        <td className="px-4 py-3 font-mono text-xs">{item.filename}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${isExpiringSoon ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500'}`}>
+                            <Clock className="size-3" />
+                            {timeString}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <a
+                            href={item.downloadUrl}
+                            download={item.filename}
+                            className="inline-flex items-center gap-1 text-gold hover:text-gold/80 hover:underline font-medium text-xs"
+                          >
+                            <Download className="size-3" /> Download
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+        </div>
+      )}
     </AppShell>
   );
 }

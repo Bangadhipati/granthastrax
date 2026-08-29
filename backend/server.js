@@ -328,7 +328,7 @@ app.post('/api/compile', requireAuth, async (req, res) => {
 
 // Image Studio Routes
 const imageStudioRoutes = require('./routes/imageStudio');
-app.use('/api/image-studio', requireAuth, imageStudioRoutes);
+app.use('/api/image-studio', imageStudioRoutes);
 
 // Basic test route
 app.get('/', (req, res) => {
