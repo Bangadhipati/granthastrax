@@ -29,9 +29,9 @@ export function AuthModal({ children }: AuthModalProps) {
         await signInWithGithub();
       }
       setOpen(false); // Close modal on success
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error signing in with ${provider}:`, error);
-      // In a real app, you might want to show a toast notification here
+      window.alert(`Firebase Error: ${error?.message || 'Unknown error'}. Check console for details.`);
     } finally {
       setIsSigningIn(null);
     }
