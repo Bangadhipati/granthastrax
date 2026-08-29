@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { User, Home, ImageIcon, FileText, FlaskConical, BookOpen, Edit2, LogOut } from "lucide-react";
 import logoSrc from "@/assets/logo.jpg";
