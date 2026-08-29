@@ -38,7 +38,7 @@ export function AuthModal({ children }: AuthModalProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={setOpen} modal={false}>
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
