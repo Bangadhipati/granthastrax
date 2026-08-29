@@ -30,8 +30,10 @@ export function AuthModal({ children }: AuthModalProps) {
       }
       setOpen(false); // Close modal on success
     } catch (error: any) {
-      console.error(`Error signing in with ${provider}:`, error);
-      window.alert(`Firebase Error: ${error?.message || 'Unknown error'}. Check console for details.`);
+      // Ignore error if user just closed the popup
+      if (error?.code !== "auth/popup-closed-by-user") {
+        console.error(`Error signing in with ${provider}:`, error);
+      }
     } finally {
       setIsSigningIn(null);
     }
