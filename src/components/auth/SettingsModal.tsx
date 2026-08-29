@@ -12,12 +12,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Lock } from "lucide-react";
 
 interface SettingsModalProps {
-  children: ReactNode;
+  children?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function SettingsModal({ children }: SettingsModalProps) {
+export function SettingsModal({ children, open: externalOpen, onOpenChange: externalOnOpenChange }: SettingsModalProps) {
   const { updateUserPassword, logout } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setOpen = externalOnOpenChange || setInternalOpen;
+
   const [isUpdating, setIsUpdating] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -64,10 +69,12 @@ export function SettingsModal({ children }: SettingsModalProps) {
         setSuccess(false);
         setPassword("");
       }
-    }} modal={false}>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
+    }} modal={true}>
+      {children && (
+        <DialogTrigger asChild>
+          {children}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md border-border/50 bg-background/90 backdrop-blur-xl shadow-2xl shadow-black/40 rounded-2xl">
         <DialogHeader className="space-y-3">
           <DialogTitle className="text-center text-xl font-display tracking-tight text-foreground">
