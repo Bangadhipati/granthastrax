@@ -25,7 +25,16 @@ const ProjectSchema = new mongoose.Schema({
   lastEditedBy: {
     type: String,
     default: '',
-  }
+  },
+  compiler: {
+    type: String,
+    default: 'pdflatex', // 'pdflatex', 'xelatex', 'lualatex'
+  },
+  images: [{
+    name: String,
+    url: String,
+    publicId: String
+  }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Project', ProjectSchema);

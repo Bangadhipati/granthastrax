@@ -2,14 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { EditorShell } from "@/components/layout/EditorShell";
 import { ResearchSidebar } from "./ResearchSidebar";
-import { TipTapEditor } from "./TipTapEditor";
+import { PdfViewer } from "./PdfViewer";
 import { ShareModal } from "./ShareModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { 
-  Loader2, Play, Download, ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
-  Bold, Italic, Underline as UnderlineIcon, AlignCenter, AlignLeft, AlignRight,
-  List, ListOrdered, Image as ImageIcon, Columns as ColumnsIcon, ArrowLeft
+  Loader2, Play, ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
+  ArrowLeft, Download
 } from "lucide-react";
 import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
@@ -18,44 +17,9 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-const fontSizes = ["10px", "12px", "14px", "16px", "18px", "20px", "24px", "30px", "36px"];
-
-const fonts = [
-  { name: "Inter", value: "Inter, sans-serif" },
-  { name: "Georgia", value: "Georgia, serif" },
-  { name: "Times New Roman", value: "'Times New Roman', Times, serif" },
-  { name: "Courier New", value: "'Courier New', Courier, monospace" },
-  { name: "Arial", value: "Arial, Helvetica, sans-serif" },
-];
-
-function ToolbarButton({
-  isActive = false,
-  onClick,
-  icon: Icon,
-}: {
-  isActive?: boolean;
-  onClick: () => void;
-  icon: any;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`grid size-7 place-items-center rounded text-muted-foreground transition-colors ${
-        isActive ? "bg-accent text-gold" : "hover:bg-secondary hover:text-foreground"
-      }`}
-    >
-      <Icon className="size-3.5" strokeWidth={1.7} />
-    </button>
-  );
-}
-
 
 export function ResearchWorkspace({ projectId }: { projectId: string }) {
   const [latexContent, setLatexContent] = useState("");
-  const [editorState, setEditorState] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const queryClient = useQueryClient();
@@ -76,13 +40,12 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (project && !isInitialized) {
       setLatexContent(project.content || "");
-      setEditorState(project.editorState || "");
       setIsInitialized(true);
     }
   }, [project, isInitialized]);
 
   const saveMutation = useMutation({
-    mutationFn: async (payload: { title?: string, content?: string, editorState?: string }) => {
+    mutationFn: async (payload: { title?: string, content?: string, compiler?: string }) => {
       const res = await api.put(`/api/projects/${projectId}`, payload);
       return res.data;
     },
@@ -96,7 +59,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
           ...old,
           content: payload.content !== undefined ? payload.content : old.content,
           title: payload.title !== undefined ? payload.title : old.title,
-          editorState: payload.editorState !== undefined ? payload.editorState : old.editorState,
+          compiler: payload.compiler !== undefined ? payload.compiler : old.compiler,
         };
       });
     },
@@ -107,15 +70,13 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!project || !isInitialized) return;
     const currentProjectContent = project.content || "";
-    const currentProjectState = project.editorState || "";
-    if (latexContent === currentProjectContent && editorState === currentProjectState) return;
+    if (latexContent === currentProjectContent) return;
 
     const timeout = setTimeout(() => {
-      saveMutation.mutate({ content: latexContent, editorState: editorState });
+      saveMutation.mutate({ content: latexContent });
     }, 1500);
     return () => clearTimeout(timeout);
-  }, [latexContent, editorState, project?.content, project?.editorState, isInitialized, saveMutation.mutate]);
-
+  }, [latexContent, project?.content, isInitialized, saveMutation.mutate]);
 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isCompiling, setIsCompiling] = useState(false);
@@ -136,21 +97,18 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
     return () => document.removeEventListener("wheel", handleWheel);
   }, []);
 
-    const handleCompile = async () => {
+  const handleCompile = async () => {
     setIsCompiling(true);
     try {
-      const res = await api.post("/api/compile", { content: latexContent }, { responseType: 'blob' });
+      const res = await api.post("/api/compile", { 
+        content: latexContent,
+        engine: project?.compiler || 'pdflatex'
+      }, { responseType: 'blob' });
       
       if (res.status === 200) {
         const blob = res.data;
         const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${project?.title || "document"}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        setPdfUrl(url);
       } else {
         alert("Compilation failed. Please check your LaTeX syntax.");
       }
@@ -162,18 +120,29 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
     }
   };
 
-  function insertTag(startTag: string, endTag: string = "") {
+  const handleDownloadPdf = () => {
+    if (!pdfUrl) return;
+    const a = document.createElement("a");
+    a.href = pdfUrl;
+    a.download = `${project?.title || "document"}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  function insertTextAtCursor(textToInsert: string) {
     if (!editorRef.current?.view) return;
     const view = editorRef.current.view;
     const { from, to } = view.state.selection.main;
-    const selectedText = view.state.sliceDoc(from, to);
-    const newText = startTag + selectedText + endTag;
     
     view.dispatch({
-      changes: { from, to, insert: newText },
-      selection: { anchor: from + startTag.length, head: from + startTag.length + selectedText.length }
+      changes: { from, to, insert: textToInsert },
+      selection: { anchor: from + textToInsert.length }
     });
     view.focus();
+    
+    // Trigger the autosave
+    setLatexContent(view.state.doc.toString());
   }
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
@@ -182,7 +151,12 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
 
   return (
     <EditorShell title={project?.title} onTitleChange={(newTitle) => saveMutation.mutate({ title: newTitle })} isSaving={isSaving} lastSaved={lastSaved} >
-      <ResearchSidebar latexContent={latexContent} />
+      <ResearchSidebar 
+        projectId={projectId} 
+        project={project}
+        onCompilerChange={(compiler) => saveMutation.mutate({ compiler })}
+        onInsertImage={(url, name) => insertTextAtCursor(`\\includegraphics{${url}} % ${name}\n`)}
+      />
 
       {/* Main Workspace Area */}
       <div className="flex h-full flex-1 flex-col overflow-hidden bg-muted/20">
@@ -191,24 +165,26 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background/50 px-4">
           <button
             type="button"
-            onClick={() => window.close()}
+            onClick={() => window.location.href = '/research'}
             className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors duration-300 hover:bg-secondary hover:text-gold"
           >
             <ArrowLeft className="size-3.5" /> Close Workspace
           </button>
           
-          <div className="text-xs text-muted-foreground ml-4 hidden md:block">
-            
-          </div>
-          
-           <div className="flex flex-1 items-center justify-center gap-1.5 px-4 overflow-x-auto no-scrollbar">
-             {/* TipTap formatting toolbar will be moved inside TipTapEditor or controlled separately. For now, hiding this to avoid conflict with raw code injection */}
-           </div>
-          
           <div className="flex items-center gap-2">
             {project?.userId === user?.uid && (
                <ShareModal project={project} />
             )}
+            
+            {pdfUrl && (
+              <button
+                onClick={handleDownloadPdf}
+                className="inline-flex items-center gap-2 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-foreground transition-opacity hover:opacity-90"
+              >
+                <Download className="size-3.5" /> Download PDF
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleCompile}
@@ -224,30 +200,10 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
         {/* Resizable Split Canvas */}
         <div className="h-full flex-1 overflow-hidden">
           <ResizablePanelGroup orientation="horizontal">
-            {/* WYSIWYG Editor Pane */}
-            <ResizablePanel defaultSize={60} minSize={30} className="flex h-full flex-col bg-background relative">
-              <div className="flex shrink-0 items-center justify-between border-b border-border bg-background/40 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                <span>Visual Editor</span>
-              </div>
-              
-              {isInitialized && (
-                <TipTapEditor 
-                  initialContent={editorState}
-                  onUpdate={(json, latex) => {
-                    setEditorState(JSON.stringify(json));
-                    setLatexContent(latex);
-                  }}
-                />
-              )}
-            </ResizablePanel>
-            
-            <ResizableHandle withHandle className="bg-border hover:bg-gold/50 transition-colors z-10 w-1" />
-
             {/* LaTeX Source Pane */}
-            <ResizablePanel defaultSize={40} minSize={20} className="flex h-full flex-col bg-[#0a0a0a]">
+            <ResizablePanel defaultSize={50} minSize={20} className="flex h-full flex-col bg-[#0a0a0a]">
               <div className="flex shrink-0 items-center justify-between border-b border-border bg-background/40 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                <span>Generated LaTeX Code</span>
-                <span className="text-gold">Source</span>
+                <span>LaTeX Code (main.tex)</span>
               </div>
               <div 
                 className="flex-1 overflow-hidden relative"
@@ -258,19 +214,84 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
                 }}
               >
                 <CodeMirror
+                    ref={editorRef}
                     value={latexContent}
                     theme="dark"
-                    readOnly
                     height="100%"
-                    className="h-full w-full border-none bg-transparent font-mono outline-none opacity-80"
+                    onChange={(val) => setLatexContent(val)}
+                    className="h-full w-full border-none bg-transparent font-mono outline-none"
                     extensions={[EditorView.theme({ "&": { fontSize: `${13 * latexZoom}px` } })]}
                     basicSetup={{
                       lineNumbers: true,
-                      highlightActiveLine: false,
-                      foldGutter: false,
-                      dropCursor: false,
+                      highlightActiveLine: true,
+                      foldGutter: true,
+                      dropCursor: true,
                     }}
                   />
+              </div>
+            </ResizablePanel>
+
+            <ResizableHandle withHandle className="bg-border hover:bg-gold/50 transition-colors z-10 w-1" />
+
+            {/* PDF Preview Pane */}
+            <ResizablePanel defaultSize={50} minSize={30} className="flex h-full flex-col bg-muted/30">
+              <div className="flex shrink-0 items-center justify-between border-b border-border bg-background/40 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                <span>PDF Preview</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 rounded bg-secondary/50 p-0.5">
+                    <button
+                      type="button"
+                      disabled={pageNumber <= 1}
+                      onClick={() => setPageNumber(p => p - 1)}
+                      className="rounded p-0.5 hover:bg-background disabled:opacity-30"
+                    >
+                      <ChevronLeft className="size-3" />
+                    </button>
+                    <span className="min-w-[3rem] text-center">{pageNumber} / {numPages || '-'}</span>
+                    <button
+                      type="button"
+                      disabled={pageNumber >= numPages}
+                      onClick={() => setPageNumber(p => p + 1)}
+                      className="rounded p-0.5 hover:bg-background disabled:opacity-30"
+                    >
+                      <ChevronRight className="size-3" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1 rounded bg-secondary/50 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewZoom(z => Math.max(0.5, z - 0.2))}
+                      className="rounded p-0.5 hover:bg-background"
+                    >
+                      <ZoomOut className="size-3" />
+                    </button>
+                    <span className="min-w-[2.5rem] text-center">{Math.round(previewZoom * 100)}%</span>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewZoom(z => Math.min(3, z + 0.2))}
+                      className="rounded p-0.5 hover:bg-background"
+                    >
+                      <ZoomIn className="size-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div 
+                className="flex-1 overflow-auto p-4 flex justify-center items-start bg-[#525659] shadow-inner"
+                onWheel={(e) => {
+                  if (e.ctrlKey || e.metaKey) {
+                    setPreviewZoom((z) => Math.min(Math.max(0.5, z - e.deltaY * 0.001), 3));
+                  }
+                }}
+              >
+                <PdfViewer
+                  pdfUrl={pdfUrl}
+                  isCompiling={isCompiling}
+                  pageNumber={pageNumber}
+                  previewZoom={previewZoom}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                />
               </div>
             </ResizablePanel>
           </ResizablePanelGroup>
@@ -279,6 +300,3 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
     </EditorShell>
   );
 }
-
-
-

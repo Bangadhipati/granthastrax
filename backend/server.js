@@ -123,6 +123,7 @@ app.put('/api/projects/:id', requireAuth, async (req, res) => {
     if (title) project.title = title;
     if (content !== undefined) project.content = content;
     if (editorState !== undefined) project.editorState = editorState;
+    if (req.body.compiler !== undefined) project.compiler = req.body.compiler;
     
     project.lastEditedBy = req.userName;
     
@@ -178,10 +179,78 @@ app.delete('/api/projects/:id', requireAuth, async (req, res) => {
   }
 });
 
+// --- Image Management Routes ---
+
+// Add a new image to project
+app.post('/api/projects/:id/images', requireAuth, async (req, res) => {
+  try {
+    const { name, url, publicId } = req.body;
+    if (!name || !url) return res.status(400).json({ error: 'Name and URL required' });
+
+    const project = await Project.findOne({ 
+      _id: req.params.id,
+      $or: [{ userId: req.userId }, { collaboratorIdentifiers: { $in: req.userIdentifiers } }]
+    });
+
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    project.images.push({ name, url, publicId });
+    project.lastEditedBy = req.userName;
+    await project.save();
+    res.json(project);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to add image' });
+  }
+});
+
+// Rename an image
+app.put('/api/projects/:id/images/:imageId', requireAuth, async (req, res) => {
+  try {
+    const { name } = req.body;
+    const project = await Project.findOne({ 
+      _id: req.params.id,
+      $or: [{ userId: req.userId }, { collaboratorIdentifiers: { $in: req.userIdentifiers } }]
+    });
+
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const image = project.images.id(req.params.imageId);
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+
+    if (name) image.name = name;
+    project.lastEditedBy = req.userName;
+    
+    await project.save();
+    res.json(project);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update image' });
+  }
+});
+
+// Delete an image
+app.delete('/api/projects/:id/images/:imageId', requireAuth, async (req, res) => {
+  try {
+    const project = await Project.findOne({ 
+      _id: req.params.id,
+      $or: [{ userId: req.userId }, { collaboratorIdentifiers: { $in: req.userIdentifiers } }]
+    });
+
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    project.images.pull({ _id: req.params.imageId });
+    project.lastEditedBy = req.userName;
+    
+    await project.save();
+    res.json(project);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete image' });
+  }
+});
+
 // Compile LaTeX via texlive.net proxy to avoid frontend CORS
 app.post('/api/compile', requireAuth, async (req, res) => {
   try {
-    const { content } = req.body;
+    const { content, engine = 'pdflatex' } = req.body;
     if (!content) {
       return res.status(400).json({ error: 'LaTeX content is required' });
     }
@@ -191,7 +260,7 @@ app.post('/api/compile', requireAuth, async (req, res) => {
     const formData = new FormData();
     formData.append('filecontents[]', content);
     formData.append('filename[]', 'document.tex');
-    formData.append('engine', 'pdflatex');
+    formData.append('engine', engine);
     formData.append('return', 'pdf');
 
     const response = await axios.post('https://texlive.net/cgi-bin/latexcgi', formData, {
