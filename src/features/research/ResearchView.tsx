@@ -4,35 +4,8 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatDistanceToNow } from "date-fns";
 
-import CodeMirror, { ReactCodeMirrorRef } from '@uiw/react-codemirror';
-import { EditorView } from '@codemirror/view';
-import { PdfViewer } from "./PdfViewer";
 
-
-
-import { FontSize } from "./extensions/FontSize";
-import { Columns } from "./extensions/Columns";
-
-
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import UnderlineExtension from "@tiptap/extension-underline";
-import TextAlign from "@tiptap/extension-text-align";
-import ImageExtension from "@tiptap/extension-image";
-import { TextStyle } from "@tiptap/extension-text-style";
-import FontFamily from "@tiptap/extension-font-family";
-import { Panel } from "@/components/layout/Panel";
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { Columns as ColumnsIcon, Heading1, Heading2, Heading3, Type, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, AlignJustify, ListOrdered, Image as ImageIcon, GripVertical } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-import { ChevronLeft, ChevronRight, Loader2, Plus, ArrowLeft, Download, Bold, Italic, Sigma, List, Table2, Quote, FileArchive, FileText, File, ZoomIn, ZoomOut, Maximize2, Play } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
-import { EditorShell } from "@/components/layout/EditorShell";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { ResearchSidebar } from "./ResearchSidebar";
-import { convertHtmlToLatex } from "./htmlToLatex";
-import { convertLatexToHtml } from "./latexToHtml";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -43,7 +16,9 @@ import {
 } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { AppShell } from "@/components/layout/AppShell";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Plus, Loader2 } from "lucide-react";
 
 
 
@@ -74,7 +49,7 @@ export function ResearchView() {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setDialogOpen(false);
       setNewProjectName("");
-      setActiveProjectId(data._id);
+      window.open(`/research/${data._id}`, '_blank');
     },
   });
 
@@ -87,7 +62,6 @@ export function ResearchView() {
     },
   });
 
-  if (activeProjectId) return <Editor projectId={activeProjectId} onBack={() => setActiveProjectId(null)} />;
 
   return (
     <AppShell>
@@ -144,7 +118,7 @@ export function ResearchView() {
         ) : isLoading ? (
           <div className="flex justify-center p-8"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
         ) : (
-          <Panel className="overflow-x-auto p-0">
+          <div className="overflow-x-auto rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
@@ -169,7 +143,7 @@ export function ResearchView() {
                   >
                     <TableCell className="font-medium">{p.title}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {formatDistanceToNow(new Date(p.updatedAt), { addSuffix: true })}
+                      {p.updatedAt ? formatDistanceToNow(new Date(p.updatedAt), { addSuffix: true }) : 'Unknown'}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -186,7 +160,7 @@ export function ResearchView() {
                 ))}
               </TableBody>
             </Table>
-          </Panel>
+          </div>
         )}
       </div>
     </AppShell>
