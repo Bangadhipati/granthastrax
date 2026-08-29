@@ -1,7 +1,15 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { User, Home, ImageIcon, FileText, FlaskConical, BookOpen, Edit2 } from "lucide-react";
+import { User, Home, ImageIcon, FileText, FlaskConical, BookOpen, Edit2, LogOut } from "lucide-react";
 import logoSrc from "@/assets/logo.jpg";
+import { AuthModal } from "@/components/auth/AuthModal";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const items = [
   { to: "/", label: "Home", icon: Home },
@@ -14,6 +22,7 @@ const items = [
 export function EditorTopNav() {
   const [title, setTitle] = useState("Graph Attention for Protein Folding");
   const [isEditing, setIsEditing] = useState(false);
+  const { user, logout } = useAuth();
 
   return (
     <header className="flex h-14 w-full shrink-0 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-xl">
@@ -73,13 +82,43 @@ export function EditorTopNav() {
             </Link>
           ))}
         </div>
-        <button
-          type="button"
-          aria-label="Account"
-          className="grid size-8 place-items-center rounded-full border border-border bg-secondary/60 text-muted-foreground transition-colors duration-300 hover:border-gold/40 hover:text-gold"
-        >
-          <User className="size-4" strokeWidth={1.6} />
-        </button>
+        
+        {user ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Account menu"
+                className="grid size-8 place-items-center overflow-hidden rounded-full border border-border bg-secondary/60 text-muted-foreground transition-colors duration-300 hover:border-gold/40 hover:text-gold focus:outline-none"
+              >
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt={user.displayName || "User"} className="size-full object-cover" />
+                ) : (
+                  <span className="text-xs font-medium">{user.email?.[0].toUpperCase() || "U"}</span>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 bg-background/95 backdrop-blur-xl border-border/50 shadow-xl rounded-xl">
+              <div className="px-2 py-1.5 text-sm text-foreground font-medium truncate">
+                {user.displayName || user.email}
+              </div>
+              <DropdownMenuItem onClick={() => logout()} className="text-red-500 focus:bg-red-500/10 focus:text-red-500 cursor-pointer rounded-lg">
+                <LogOut className="mr-2 size-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <AuthModal>
+            <button
+              type="button"
+              aria-label="Account"
+              className="grid size-8 place-items-center rounded-full border border-border bg-secondary/60 text-muted-foreground transition-all duration-300 hover:border-gold/40 hover:text-gold hover:shadow-[0_0_10px_rgba(212,175,55,0.2)]"
+            >
+              <User className="size-4" strokeWidth={1.6} />
+            </button>
+          </AuthModal>
+        )}
       </div>
     </header>
   );

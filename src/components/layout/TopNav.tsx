@@ -1,8 +1,18 @@
 import { Link } from "@tanstack/react-router";
-import { User } from "lucide-react";
+import { User, LogOut } from "lucide-react";
 import logoSrc from "@/assets/logo.jpg";
+import { AuthModal } from "@/components/auth/AuthModal";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function TopNav() {
+  const { user, logout } = useAuth();
+
   return (
     <div className="sticky top-4 z-50 mx-auto max-w-7xl px-4 sm:px-6">
       <header className="flex w-full items-center justify-between rounded-2xl border border-border/50 bg-background/70 px-6 py-2.5 shadow-xl shadow-black/10 backdrop-blur-xl">
@@ -23,13 +33,43 @@ export function TopNav() {
             </span>
           </div>
         </Link>
-        <button
-          type="button"
-          aria-label="Account"
-          className="grid size-9 place-items-center rounded-full border border-border bg-secondary/60 text-muted-foreground transition-all duration-300 hover:border-gold/40 hover:text-gold hover:shadow-[0_0_10px_rgba(212,175,55,0.2)]"
-        >
-          <User className="size-[18px]" strokeWidth={1.6} />
-        </button>
+        
+        {user ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Account menu"
+                className="grid size-9 place-items-center overflow-hidden rounded-full border border-border bg-secondary/60 text-muted-foreground transition-all duration-300 hover:border-gold/40 hover:shadow-[0_0_10px_rgba(212,175,55,0.2)] focus:outline-none"
+              >
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt={user.displayName || "User"} className="size-full object-cover" />
+                ) : (
+                  <span className="text-sm font-medium">{user.email?.[0].toUpperCase() || "U"}</span>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 bg-background/95 backdrop-blur-xl border-border/50 shadow-xl rounded-xl">
+              <div className="px-2 py-1.5 text-sm text-foreground font-medium truncate">
+                {user.displayName || user.email}
+              </div>
+              <DropdownMenuItem onClick={() => logout()} className="text-red-500 focus:bg-red-500/10 focus:text-red-500 cursor-pointer rounded-lg">
+                <LogOut className="mr-2 size-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <AuthModal>
+            <button
+              type="button"
+              aria-label="Sign in"
+              className="grid size-9 place-items-center rounded-full border border-border bg-secondary/60 text-muted-foreground transition-all duration-300 hover:border-gold/40 hover:text-gold hover:shadow-[0_0_10px_rgba(212,175,55,0.2)]"
+            >
+              <User className="size-[18px]" strokeWidth={1.6} />
+            </button>
+          </AuthModal>
+        )}
       </header>
     </div>
   );
