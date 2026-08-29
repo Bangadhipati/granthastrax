@@ -241,8 +241,8 @@ function Editor({ projectId, onBack }: { projectId: string; onBack: () => void }
   });
 
   const saveMutation = useMutation({
-    mutationFn: async (content: string) => {
-      const res = await api.put(`/api/projects/${projectId}`, { content });
+    mutationFn: async (payload: { title?: string, content?: string }) => {
+      const res = await api.put(`/api/projects/${projectId}`, payload);
       return res.data;
     },
     onMutate: () => setIsSaving(true),
@@ -257,7 +257,7 @@ function Editor({ projectId, onBack }: { projectId: string; onBack: () => void }
   useEffect(() => {
     if (!project || latexContent === project.content) return;
     const timeout = setTimeout(() => {
-      saveMutation.mutate(latexContent);
+      saveMutation.mutate({ content: latexContent });
     }, 1500);
     return () => clearTimeout(timeout);
   }, [latexContent, project, saveMutation]);
@@ -330,8 +330,8 @@ function Editor({ projectId, onBack }: { projectId: string; onBack: () => void }
   }
 
   return (
-    <EditorShell>
-      <ResearchSidebar />
+    <EditorShell title={project?.title} onTitleChange={(newTitle) => saveMutation.mutate({ title: newTitle })} >
+      <ResearchSidebar latexContent={latexContent} />
 
       {/* Main Workspace Area */}
       <div className="flex h-full flex-1 flex-col overflow-hidden bg-muted/20">

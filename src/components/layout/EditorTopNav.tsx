@@ -19,8 +19,15 @@ const items = [
   { to: "/writer", label: "Writer", icon: BookOpen },
 ] as const;
 
-export function EditorTopNav() {
-  const [title, setTitle] = useState("Graph Attention for Protein Folding");
+export function EditorTopNav({ 
+  title = "Graph Attention for Protein Folding", 
+  onTitleChange 
+}: { 
+  title?: string;
+  onTitleChange?: (newTitle: string) => void;
+}) {
+  const [localTitle, setLocalTitle] = useState(title);
+  useEffect(() => { setLocalTitle(title); }, [title]);
   const [isEditing, setIsEditing] = useState(false);
   const { user, logout } = useAuth();
 
@@ -47,10 +54,10 @@ export function EditorTopNav() {
               type="text"
               // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={() => setIsEditing(false)}
-              onKeyDown={(e) => e.key === "Enter" && setIsEditing(false)}
+              value={localTitle}
+              onChange={(e) => setLocalTitle(e.target.value)}
+              onBlur={() => { setIsEditing(false); onTitleChange?.(localTitle); }}
+              onKeyDown={(e) => { if (e.key === "Enter") { setIsEditing(false); onTitleChange?.(localTitle); } }}
               className="w-full min-w-[200px] border-none bg-transparent text-sm font-medium text-foreground outline-none focus:ring-0"
             />
           ) : (

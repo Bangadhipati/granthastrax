@@ -22,8 +22,21 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
-export function ResearchSidebar() {
+export function ResearchSidebar({ latexContent = "" }: { latexContent?: string }) {
   const [compiler, setCompiler] = useState("pdfLaTeX");
+
+  const outline = latexContent
+    .split("\n")
+    .map(line => {
+      const match = line.match(/\\(section|subsection|subsubsection)\{([^}]+)\}/);
+      if (match) return match[2];
+      return null;
+    })
+    .filter(Boolean) as string[];
+
+  // Fallback to Abstract/Intro if empty
+  const displayOutline = outline.length > 0 ? outline : ["Abstract", "Introduction"];
+
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col overflow-y-auto border-r border-border bg-card/30 relative">
@@ -49,13 +62,9 @@ export function ResearchSidebar() {
               <span>Upload files</span>
             </button>
             <ul className="space-y-1">
-              <li className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+              <li className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground opacity-50">
                 <Folder className="size-3.5 text-gold/80" />
-                <span>figures</span>
-              </li>
-              <li className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-                <ImageIcon className="size-3.5" />
-                <span>architecture.pdf</span>
+                <span>figures (coming soon)</span>
               </li>
               <li className="flex cursor-pointer items-center gap-2 rounded-md bg-secondary/60 px-2 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary hover:text-foreground">
                 <FileText className="size-3.5" />
@@ -72,7 +81,7 @@ export function ResearchSidebar() {
           </AccordionTrigger>
           <AccordionContent className="pt-1">
             <ul className="space-y-1">
-              {["Abstract", "1. Introduction", "2. Related Work", "3. Methods", "4. Results", "5. Conclusion"].map(
+              {displayOutline.map(
                 (heading) => (
                   <li
                     key={heading}
