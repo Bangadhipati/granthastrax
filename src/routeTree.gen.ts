@@ -12,9 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DocumentsRouteImport } from './routes/documents'
 import { Route as ImagesRouteImport } from './routes/images'
-import { Route as ResearchRouteImport } from './routes/research'
 import { Route as WriterRouteImport } from './routes/writer'
-import { Route as ResearchProjectIdRouteImport } from './routes/research.$projectId'
+import { Route as ResearchIndexRouteImport } from './routes/research.index'
+import { Route as ResearchProjectIdRouteImport } from './routes/research_.$projectId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -31,46 +31,46 @@ const ImagesRoute = ImagesRouteImport.update({
   path: '/images',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ResearchRoute = ResearchRouteImport.update({
-  id: '/research',
-  path: '/research',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const WriterRoute = WriterRouteImport.update({
   id: '/writer',
   path: '/writer',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResearchIndexRoute = ResearchIndexRouteImport.update({
+  id: '/research/',
+  path: '/research/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResearchProjectIdRoute = ResearchProjectIdRouteImport.update({
-  id: '/$projectId',
-  path: '/$projectId',
-  getParentRoute: () => ResearchRoute,
+  id: '/research_/$projectId',
+  path: '/research/$projectId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/documents': typeof DocumentsRoute
   '/images': typeof ImagesRoute
-  '/research': typeof ResearchRouteWithChildren
   '/writer': typeof WriterRoute
   '/research/$projectId': typeof ResearchProjectIdRoute
+  '/research/': typeof ResearchIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/documents': typeof DocumentsRoute
   '/images': typeof ImagesRoute
-  '/research': typeof ResearchRouteWithChildren
   '/writer': typeof WriterRoute
   '/research/$projectId': typeof ResearchProjectIdRoute
+  '/research': typeof ResearchIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/documents': typeof DocumentsRoute
   '/images': typeof ImagesRoute
-  '/research': typeof ResearchRouteWithChildren
   '/writer': typeof WriterRoute
-  '/research/$projectId': typeof ResearchProjectIdRoute
+  '/research_/$projectId': typeof ResearchProjectIdRoute
+  '/research/': typeof ResearchIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -78,33 +78,34 @@ export interface FileRouteTypes {
     | '/'
     | '/documents'
     | '/images'
-    | '/research'
     | '/writer'
     | '/research/$projectId'
+    | '/research/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/documents'
     | '/images'
-    | '/research'
     | '/writer'
     | '/research/$projectId'
+    | '/research'
   id:
     | '__root__'
     | '/'
     | '/documents'
     | '/images'
-    | '/research'
     | '/writer'
-    | '/research/$projectId'
+    | '/research_/$projectId'
+    | '/research/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DocumentsRoute: typeof DocumentsRoute
   ImagesRoute: typeof ImagesRoute
-  ResearchRoute: typeof ResearchRouteWithChildren
   WriterRoute: typeof WriterRoute
+  ResearchProjectIdRoute: typeof ResearchProjectIdRoute
+  ResearchIndexRoute: typeof ResearchIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -130,13 +131,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ImagesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/research': {
-      id: '/research'
-      path: '/research'
-      fullPath: '/research'
-      preLoaderRoute: typeof ResearchRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/writer': {
       id: '/writer'
       path: '/writer'
@@ -144,34 +138,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WriterRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/research/$projectId': {
-      id: '/research/$projectId'
-      path: '/$projectId'
+    '/research/': {
+      id: '/research/'
+      path: '/research'
+      fullPath: '/research/'
+      preLoaderRoute: typeof ResearchIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/research_/$projectId': {
+      id: '/research_/$projectId'
+      path: '/research/$projectId'
       fullPath: '/research/$projectId'
       preLoaderRoute: typeof ResearchProjectIdRouteImport
-      parentRoute: typeof ResearchRoute
+      parentRoute: typeof rootRouteImport
     }
   }
 }
-
-interface ResearchRouteChildren {
-  ResearchProjectIdRoute: typeof ResearchProjectIdRoute
-}
-
-const ResearchRouteChildren: ResearchRouteChildren = {
-  ResearchProjectIdRoute: ResearchProjectIdRoute,
-}
-
-const ResearchRouteWithChildren = ResearchRoute._addFileChildren(
-  ResearchRouteChildren,
-)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DocumentsRoute: DocumentsRoute,
   ImagesRoute: ImagesRoute,
-  ResearchRoute: ResearchRouteWithChildren,
   WriterRoute: WriterRoute,
+  ResearchProjectIdRoute: ResearchProjectIdRoute,
+  ResearchIndexRoute: ResearchIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

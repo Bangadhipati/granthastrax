@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { 
   Loader2, Play, Download, ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
   Bold, Italic, Underline as UnderlineIcon, AlignCenter, AlignLeft, AlignRight,
-  List, ListOrdered, Image as ImageIcon, Columns as ColumnsIcon
+  List, ListOrdered, Image as ImageIcon, Columns as ColumnsIcon, ArrowLeft
 } from "lucide-react";
 import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
@@ -16,6 +16,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const fontSizes = ["10px", "12px", "14px", "16px", "18px", "20px", "24px", "30px", "36px"];
 

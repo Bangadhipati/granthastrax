@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ResearchView } from "@/features/research/ResearchView";
 
-export const Route = createFileRoute("/research")({
+export const Route = createFileRoute("/research/")({
   head: () => ({
     meta: [
       { title: "Research Desk — GranthAstraX" },
