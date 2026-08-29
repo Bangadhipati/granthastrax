@@ -36,10 +36,10 @@ function ssrBrowserStub(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [
     ssrBrowserStub(),
-    netlify(),
+    command === "build" ? netlify() : undefined,
     tanstackStart({
       // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
       // nitro/vite builds from this
@@ -49,4 +49,4 @@ export default defineConfig({
     tailwindcss(),
     tsconfigPaths(),
   ],
-});
+}));
