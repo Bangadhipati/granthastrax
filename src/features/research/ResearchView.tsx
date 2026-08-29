@@ -1,4 +1,9 @@
 import { useState, useEffect, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { formatDistanceToNow } from "date-fns";
+
 import CodeMirror, { ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { EditorView } from '@codemirror/view';
 import { PdfViewer } from "./PdfViewer";
@@ -40,40 +45,50 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-const projects = [
-  { title: "Graph Attention for Protein Folding", updated: "2 hours ago" },
-  { title: "Low-Rank Adapters in Edge Inference", updated: "Yesterday" },
-  { title: "Thermal Drift in MEMS Resonators", updated: "4 days ago" },
-  { title: "Federated Consent Ledgers", updated: "2 weeks ago" },
-];
 
-const latex = `\\documentclass[twocolumn]{article}
-\\usepackage{amsmath,graphicx}
 
-\\title{Graph Attention for Protein Folding}
-\\author{Debarghya Bhowmick}
 
-\\begin{document}
-\\maketitle
-
-\\begin{abstract}
-We introduce a sparse attention formulation that
-reduces folding error by 14.2\\% on CASP15.
-\\end{abstract}
-
-\\section{Introduction}
-Protein structure prediction remains a central
-problem in computational biology. We define the
-residue interaction energy as
-\\begin{equation}
-  E(x) = \\sum_{i<j} w_{ij}\\,\\phi(\\|x_i - x_j\\|).
-\\end{equation}
-\\end{document}`;
 
 export function ResearchView() {
-  const [editing, setEditing] = useState(false);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  if (editing) return <Editor onBack={() => setEditing(false)} />;
+  const { data: projects, isLoading } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      if (!user) return [];
+      const res = await api.get('/api/projects');
+      return res.data;
+    },
+    enabled: !!user,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (title: string) => {
+      const res = await api.post('/api/projects', { title });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setDialogOpen(false);
+      setNewProjectName("");
+      setActiveProjectId(data._id);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/api/projects/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+
+  if (activeProjectId) return <Editor projectId={activeProjectId} onBack={() => setActiveProjectId(null)} />;
 
   return (
     <AppShell>
@@ -82,11 +97,12 @@ export function ResearchView() {
         title="Your papers, in progress."
         description="Every project carries its own LaTeX source, editable preview and export history."
         action={
-          <Dialog>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <button
                 type="button"
-                className="inline-flex items-center gap-2 self-start rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity duration-300 hover:opacity-90"
+                className="inline-flex items-center gap-2 self-start rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity duration-300 hover:opacity-90 disabled:opacity-50"
+                disabled={!user}
               >
                 <Plus className="size-4" /> Create project
               </button>
@@ -96,10 +112,24 @@ export function ResearchView() {
                 <DialogTitle>Name the project</DialogTitle>
               </DialogHeader>
               <div className="py-4">
-                <Input placeholder="E.g., Graph Attention for Protein Folding" />
+                <Input 
+                  placeholder="E.g., Graph Attention for Protein Folding" 
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newProjectName.trim()) {
+                      createMutation.mutate(newProjectName);
+                    }
+                  }}
+                />
               </div>
               <DialogFooter>
-                <Button onClick={() => setEditing(true)}>Proceed</Button>
+                <Button 
+                  onClick={() => createMutation.mutate(newProjectName)}
+                  disabled={!newProjectName.trim() || createMutation.isPending}
+                >
+                  {createMutation.isPending ? "Creating..." : "Proceed"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -107,61 +137,62 @@ export function ResearchView() {
       />
 
       <div className="mx-auto mt-12 max-w-7xl px-6">
-        <Panel className="overflow-x-auto p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Project</TableHead>
-                <TableHead>Updated</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {projects.map((p) => (
-                <TableRow
-                  key={p.title}
-                  onClick={() => setEditing(true)}
-                  className="cursor-pointer group"
-                >
-                  <TableCell className="font-medium">{p.title}</TableCell>
-                  <TableCell className="text-muted-foreground">{p.updated}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); }}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-gold/30 hover:text-gold"
-                        title="Download ZIP"
-                      >
-                        <FileArchive className="size-3.5" /> ZIP
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); }}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-gold/30 hover:text-gold"
-                        title="Download PDF"
-                      >
-                        <File className="size-3.5" /> PDF
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); }}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-gold/30 hover:text-gold"
-                        title="Download DOCX"
-                      >
-                        <FileText className="size-3.5" /> DOCX
-                      </button>
-                    </div>
-                  </TableCell>
+        {!user ? (
+          <div className="rounded-xl border border-border/50 bg-background/50 p-8 text-center backdrop-blur-sm">
+            <h3 className="text-lg font-medium text-foreground">Sign in to use the Research Desk</h3>
+            <p className="mt-2 text-sm text-muted-foreground">You must be logged in to create and save projects.</p>
+          </div>
+        ) : isLoading ? (
+          <div className="flex justify-center p-8"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
+        ) : (
+          <Panel className="overflow-x-auto p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Project</TableHead>
+                  <TableHead>Updated</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Panel>
+              </TableHeader>
+              <TableBody>
+                {projects?.length === 0 && (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                      No projects found. Create one to get started.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {projects?.map((p: any) => (
+                  <TableRow
+                    key={p._id}
+                    onClick={() => setActiveProjectId(p._id)}
+                    className="cursor-pointer group"
+                  >
+                    <TableCell className="font-medium">{p.title}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDistanceToNow(new Date(p.updatedAt), { addSuffix: true })}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(p._id); }}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-red-900/30 bg-red-900/10 px-2.5 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-900/20"
+                          title="Delete Project"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Panel>
+        )}
       </div>
     </AppShell>
   );
 }
-
-
-
 const fontSizes = ["10px", "12px", "14px", "16px", "18px", "20px", "24px", "30px", "36px"];
 
 const fonts = [
@@ -195,29 +226,42 @@ function ToolbarButton({
 }
 
 
-function Editor({ onBack }: { onBack: () => void }) {
-  const [latexContent, setLatexContent] = useState(`\\\\documentclass{article}
-\\\\usepackage[utf8]{inputenc}
-\\\\usepackage{amsmath}
-\\\\usepackage{geometry}
-\\\\geometry{a4paper, margin=1in}
+function Editor({ projectId, onBack }: { projectId: string; onBack: () => void }) {
+  const [latexContent, setLatexContent] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-\\\\title{Graph Attention for Protein Folding}
-\\\\author{Debarghya Bhowmick}
-\\\\date{}
+  const { data: project } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: async () => {
+      const res = await api.get(`/api/projects/${projectId}`);
+      setLatexContent(res.data.content || "");
+      return res.data;
+    },
+  });
 
-\\\\begin{document}
+  const saveMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await api.put(`/api/projects/${projectId}`, { content });
+      return res.data;
+    },
+    onMutate: () => setIsSaving(true),
+    onSuccess: () => {
+      setIsSaving(false);
+      setLastSaved(new Date());
+    },
+    onError: () => setIsSaving(false),
+  });
 
-\\\\maketitle
+  // Debounced Autosave
+  useEffect(() => {
+    if (!project || latexContent === project.content) return;
+    const timeout = setTimeout(() => {
+      saveMutation.mutate(latexContent);
+    }, 1500);
+    return () => clearTimeout(timeout);
+  }, [latexContent, project, saveMutation]);
 
-\\\\begin{abstract}
-We introduce a sparse attention formulation that reduces folding error by 14.2\\\\% on CASP15.
-\\\\end{abstract}
-
-\\\\section{Introduction}
-Protein structure prediction remains a central problem in computational biology.
-
-\\\\end{document}`);
 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isCompiling, setIsCompiling] = useState(false);
@@ -301,6 +345,10 @@ Protein structure prediction remains a central problem in computational biology.
           >
             <ArrowLeft className="size-3.5" /> Back to projects
           </button>
+          
+          <div className="text-xs text-muted-foreground ml-4 hidden md:block">
+            {isSaving ? "Saving..." : lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : ""}
+          </div>
           
           <div className="flex flex-1 items-center justify-center gap-1.5 px-4 overflow-x-auto no-scrollbar">
             <Select onValueChange={(val) => insertTag(`\\${val}{`, '}')}>

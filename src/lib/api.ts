@@ -14,11 +14,13 @@ export const api = axios.create({
   },
 });
 
-// Optional: You can add interceptors here later to automatically attach Firebase Auth tokens
-// api.interceptors.request.use(async (config) => {
-//   const token = await getFirebaseAuthToken();
-//   if (token) {
-//     config.headers.Authorization = `Bearer ${token}`;
-//   }
-//   return config;
-// });
+import { auth } from './firebase';
+
+// Add interceptor to automatically attach the Firebase Auth user ID
+api.interceptors.request.use((config) => {
+  const user = auth.currentUser;
+  if (user) {
+    config.headers['x-user-id'] = user.uid;
+  }
+  return config;
+});
