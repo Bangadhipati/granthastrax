@@ -85,10 +85,10 @@ app.get('/api/projects/:id', requireAuth, async (req, res) => {
 // Update a project's content (Autosave/Manual Save)
 app.put('/api/projects/:id', requireAuth, async (req, res) => {
   try {
-    const { title, content } = req.body;
+    const { title, content, editorState } = req.body;
     const project = await Project.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
-      { $set: { ...(title && { title }), ...(content !== undefined && { content }) } },
+      { $set: { ...(title && { title }), ...(content !== undefined && { content }), ...(editorState !== undefined && { editorState }) } },
       { new: true }
     );
     if (!project) {

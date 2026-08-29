@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { EditorShell } from "@/components/layout/EditorShell";
 import { ResearchSidebar } from "./ResearchSidebar";
-import { PdfViewer } from "./PdfViewer";
+import { TipTapEditor } from "./TipTapEditor";
 import { api } from "@/lib/api";
 import { 
   Loader2, Play, Download, ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
@@ -53,6 +53,7 @@ function ToolbarButton({
 
 export function ResearchWorkspace({ projectId }: { projectId: string }) {
   const [latexContent, setLatexContent] = useState("");
+  const [editorState, setEditorState] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const queryClient = useQueryClient();
@@ -72,12 +73,13 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (project && !isInitialized) {
       setLatexContent(project.content || "");
+      setEditorState(project.editorState || "");
       setIsInitialized(true);
     }
   }, [project, isInitialized]);
 
   const saveMutation = useMutation({
-    mutationFn: async (payload: { title?: string, content?: string }) => {
+    mutationFn: async (payload: { title?: string, content?: string, editorState?: string }) => {
       const res = await api.put(`/api/projects/${projectId}`, payload);
       return res.data;
     },
@@ -91,6 +93,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
           ...old,
           content: payload.content !== undefined ? payload.content : old.content,
           title: payload.title !== undefined ? payload.title : old.title,
+          editorState: payload.editorState !== undefined ? payload.editorState : old.editorState,
         };
       });
     },
@@ -101,13 +104,14 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!project || !isInitialized) return;
     const currentProjectContent = project.content || "";
-    if (latexContent === currentProjectContent) return;
+    const currentProjectState = project.editorState || "";
+    if (latexContent === currentProjectContent && editorState === currentProjectState) return;
 
     const timeout = setTimeout(() => {
-      saveMutation.mutate({ content: latexContent });
+      saveMutation.mutate({ content: latexContent, editorState: editorState });
     }, 1500);
     return () => clearTimeout(timeout);
-  }, [latexContent, project?.content, isInitialized, saveMutation.mutate]);
+  }, [latexContent, editorState, project?.content, project?.editorState, isInitialized, saveMutation.mutate]);
 
 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -136,8 +140,14 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
       
       if (res.status === 200) {
         const blob = res.data;
-        setPdfUrl(URL.createObjectURL(blob));
-        setPageNumber(1);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${project?.title || "document"}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
       } else {
         alert("Compilation failed. Please check your LaTeX syntax.");
       }
@@ -188,66 +198,9 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
             
           </div>
           
-          <div className="flex flex-1 items-center justify-center gap-1.5 px-4 overflow-x-auto no-scrollbar">
-            <Select onValueChange={(val) => insertTag(`\\${val}{`, '}')}>
-              <SelectTrigger className="w-[110px] h-8 text-xs border-border bg-background">
-                <SelectValue placeholder="Heading" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="section">Heading 1</SelectItem>
-                <SelectItem value="subsection">Heading 2</SelectItem>
-                <SelectItem value="subsubsection">Heading 3</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select onValueChange={(val) => insertTag(`{\\fontsize{${val}}{${parseInt(val)+2}}\\selectfont `, '}')}>
-              <SelectTrigger className="w-[80px] h-8 text-xs border-border bg-background">
-                <SelectValue placeholder="Size" />
-              </SelectTrigger>
-              <SelectContent>
-                {["10", "12", "14", "16", "18", "20", "24"].map((size) => (
-                  <SelectItem key={size} value={size}>{size}pt</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="h-4 w-px bg-border mx-1" />
-
-            <div className="flex items-center rounded-md border border-border bg-background p-0.5">
-              <ToolbarButton onClick={() => insertTag('\\textbf{', '}')} icon={Bold} />
-              <ToolbarButton onClick={() => insertTag('\\textit{', '}')} icon={Italic} />
-              <ToolbarButton onClick={() => insertTag('\\underline{', '}')} icon={UnderlineIcon} />
-            </div>
-
-            <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
-
-            <div className="flex items-center rounded-md border border-border bg-background p-0.5">
-              <ToolbarButton onClick={() => insertTag('\\begin{center}\\n', '\\n\\end{center}')} icon={AlignCenter} />
-              <ToolbarButton onClick={() => insertTag('\\begin{flushleft}\\n', '\\n\\end{flushleft}')} icon={AlignLeft} />
-              <ToolbarButton onClick={() => insertTag('\\begin{flushright}\\n', '\\n\\end{flushright}')} icon={AlignRight} />
-            </div>
-
-            <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
-
-            <div className="flex items-center rounded-md border border-border bg-background p-0.5">
-              <ToolbarButton onClick={() => insertTag('\\begin{itemize}\\n\\item ', '\\n\\end{itemize}')} icon={List} />
-              <ToolbarButton onClick={() => insertTag('\\begin{enumerate}\\n\\item ', '\\n\\end{enumerate}')} icon={ListOrdered} />
-            </div>
-            
-            <div className="h-4 w-px bg-border mx-1" />
-
-            <div className="flex items-center rounded-md border border-border bg-background p-0.5">
-              <ToolbarButton onClick={() => {
-                const url = window.prompt("Enter Image URL");
-                if (url) insertTag(`\\begin{figure}[h]\\n\\centering\\n\\includegraphics[width=0.5\\textwidth]{${url}}\\n\\caption{`, `}\\n\\end{figure}`);
-              }} icon={ImageIcon} />
-              <ToolbarButton onClick={() => {
-                const cols = window.prompt("Number of columns? (1 or 2)");
-                if (cols === "2") insertTag('\\twocolumn\\n');
-                else insertTag('\\onecolumn\\n');
-              }} icon={ColumnsIcon} />
-            </div>
-          </div>
+           <div className="flex flex-1 items-center justify-center gap-1.5 px-4 overflow-x-auto no-scrollbar">
+             {/* TipTap formatting toolbar will be moved inside TipTapEditor or controlled separately. For now, hiding this to avoid conflict with raw code injection */}
+           </div>
           
           <div className="flex items-center gap-2">
             <button
@@ -257,13 +210,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
               className="inline-flex items-center gap-2 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-black transition-opacity duration-300 hover:opacity-90 disabled:opacity-50"
             >
               {isCompiling ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 fill-current" />} 
-              {isCompiling ? "Compiling..." : "Compile"}
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity duration-300 hover:opacity-90"
-            >
-              <Download className="size-3.5" /> Export
+              {isCompiling ? "Compiling PDF..." : "Compile to PDF"}
             </button>
           </div>
         </div>
@@ -271,10 +218,29 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
         {/* Resizable Split Canvas */}
         <div className="h-full flex-1 overflow-hidden">
           <ResizablePanelGroup orientation="horizontal">
-            {/* LaTeX Pane */}
+            {/* WYSIWYG Editor Pane */}
+            <ResizablePanel defaultSize={60} minSize={30} className="flex h-full flex-col bg-background relative">
+              <div className="flex shrink-0 items-center justify-between border-b border-border bg-background/40 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                <span>Visual Editor</span>
+              </div>
+              
+              {isInitialized && (
+                <TipTapEditor 
+                  initialContent={editorState}
+                  onUpdate={(json, latex) => {
+                    setEditorState(JSON.stringify(json));
+                    setLatexContent(latex);
+                  }}
+                />
+              )}
+            </ResizablePanel>
+            
+            <ResizableHandle withHandle className="bg-border hover:bg-gold/50 transition-colors z-10 w-1" />
+
+            {/* LaTeX Source Pane */}
             <ResizablePanel defaultSize={40} minSize={20} className="flex h-full flex-col bg-[#0a0a0a]">
               <div className="flex shrink-0 items-center justify-between border-b border-border bg-background/40 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                <span>main.tex</span>
+                <span>Generated LaTeX Code</span>
                 <span className="text-gold">Source</span>
               </div>
               <div 
@@ -286,85 +252,19 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
                 }}
               >
                 <CodeMirror
-                    ref={editorRef}
                     value={latexContent}
-                    onChange={(value) => setLatexContent(value)}
                     theme="dark"
+                    readOnly
                     height="100%"
-                    className="h-full w-full border-none bg-transparent font-mono outline-none"
+                    className="h-full w-full border-none bg-transparent font-mono outline-none opacity-80"
                     extensions={[EditorView.theme({ "&": { fontSize: `${13 * latexZoom}px` } })]}
                     basicSetup={{
                       lineNumbers: true,
                       highlightActiveLine: false,
                       foldGutter: false,
                       dropCursor: false,
-                      allowMultipleSelections: false,
-                      indentOnInput: false,
                     }}
                   />
-              </div>
-            </ResizablePanel>
-
-            <ResizableHandle withHandle className="bg-border hover:bg-gold/50 transition-colors z-10 w-1">
-            </ResizableHandle>
-
-            {/* PDF Viewer Pane */}
-            <ResizablePanel defaultSize={60} minSize={30} className="flex h-full flex-col bg-background relative">
-              <div className="flex shrink-0 items-center justify-between border-b border-border bg-background/40 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                <span>PDF Preview</span>
-                
-                {/* Zoom Controls */}
-                <div className="flex items-center gap-2 border-r border-border pr-4 mr-4">
-                  <button onClick={() => setPreviewZoom(z => Math.max(0.2, z - 0.2))} className="text-muted-foreground hover:text-foreground">
-                    <ZoomOut className="size-4" />
-                  </button>
-                  <span className="font-medium text-foreground w-8 text-center">{Math.round(previewZoom * 100)}%</span>
-                  <button onClick={() => setPreviewZoom(z => Math.min(5, z + 0.2))} className="text-muted-foreground hover:text-foreground">
-                    <ZoomIn className="size-4" />
-                  </button>
-                </div>
-                
-                {/* Pagination Controls */}
-                {pdfUrl && numPages > 0 && (
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => setPageNumber(p => Math.max(1, p - 1))}
-                      disabled={pageNumber <= 1}
-                      className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-                    >
-                      <ChevronLeft className="size-4" />
-                    </button>
-                    <span className="font-medium text-foreground">
-                      Page {pageNumber} of {numPages}
-                    </span>
-                    <button 
-                      onClick={() => setPageNumber(p => Math.min(numPages, p + 1))}
-                      disabled={pageNumber >= numPages}
-                      className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-                    >
-                      <ChevronRight className="size-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div 
-                className="flex-1 overflow-auto bg-muted/30 p-8 lg:p-12 relative flex justify-center items-start"
-                onWheel={(e) => {
-                  if (e.ctrlKey || e.metaKey) {
-                    setPreviewZoom((z) => Math.min(Math.max(0.2, z - e.deltaY * 0.001), 5));
-                  }
-                }}
-              >
-                <div>
-                    <PdfViewer
-                      pdfUrl={pdfUrl}
-                      isCompiling={isCompiling}
-                      pageNumber={pageNumber}
-                      previewZoom={previewZoom}
-                      onLoadSuccess={onDocumentLoadSuccess}
-                    />
-                </div>
               </div>
             </ResizablePanel>
           </ResizablePanelGroup>
