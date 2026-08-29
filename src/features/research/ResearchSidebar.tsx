@@ -158,26 +158,6 @@ export function ResearchSidebar({
             </AccordionContent>
           </AccordionItem>
 
-          {/* Outline Section */}
-          <AccordionItem value="outline" className="border-b-0 px-4">
-            <AccordionTrigger className="py-2 text-xs font-semibold text-foreground hover:no-underline">
-              Outline
-            </AccordionTrigger>
-            <AccordionContent className="pt-1">
-              <ul className="space-y-1">
-                {displayOutline.map((heading, i) => (
-                  <li
-                    key={i}
-                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                  >
-                    <Hash className="size-3 text-gold/50" />
-                    <span className="truncate">{heading}</span>
-                  </li>
-                ))}
-              </ul>
-            </AccordionContent>
-          </AccordionItem>
-
           {/* Image Manager Section */}
           <AccordionItem value="images" className="border-b-0 px-4">
             <AccordionTrigger className="py-2 text-xs font-semibold text-foreground hover:no-underline">
@@ -244,6 +224,26 @@ export function ResearchSidebar({
                 {images.length === 0 && !isUploading && (
                   <li className="text-[10px] text-muted-foreground/60 text-center py-2">No images uploaded</li>
                 )}
+              </ul>
+            </AccordionContent>
+          </AccordionItem>
+
+          {/* Outline Section */}
+          <AccordionItem value="outline" className="border-b-0 px-4">
+            <AccordionTrigger className="py-2 text-xs font-semibold text-foreground hover:no-underline">
+              Outline
+            </AccordionTrigger>
+            <AccordionContent className="pt-1">
+              <ul className="space-y-1">
+                {displayOutline.map((heading, i) => (
+                  <li
+                    key={i}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  >
+                    <Hash className="size-3 text-gold/50" />
+                    <span className="truncate">{heading}</span>
+                  </li>
+                ))}
               </ul>
             </AccordionContent>
           </AccordionItem>
