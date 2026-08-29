@@ -250,7 +250,7 @@ app.delete('/api/projects/:id/images/:imageId', requireAuth, async (req, res) =>
 // Compile LaTeX via texlive.net proxy to avoid frontend CORS
 app.post('/api/compile', requireAuth, async (req, res) => {
   try {
-    const { content, engine = 'pdflatex' } = req.body;
+    let { content, engine = 'pdflatex' } = req.body;
     if (!content) {
       return res.status(400).json({ error: 'LaTeX content is required' });
     }
@@ -258,8 +258,54 @@ app.post('/api/compile', requireAuth, async (req, res) => {
     const FormData = require('form-data');
     const axios = require('axios');
     const formData = new FormData();
+    
+    // Find all \includegraphics{URL} and download them
+    const regex = /\\includegraphics(?:\[.*?\])?\{([^}]+)\}/g;
+    const downloadedImages = new Map();
+    let imageCounter = 0;
+
+    const replaceAsync = async (str, regex, asyncFn) => {
+      const promises = [];
+      str.replace(regex, (match, ...args) => {
+        const promise = asyncFn(match, ...args);
+        promises.push(promise);
+      });
+      const data = await Promise.all(promises);
+      return str.replace(regex, () => data.shift());
+    };
+
+    content = await replaceAsync(content, regex, async (match, url) => {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        try {
+          if (!downloadedImages.has(url)) {
+            const imgRes = await axios.get(url, { responseType: 'arraybuffer' });
+            // basic extension detection or fallback to png
+            const urlParts = url.split('?')[0].split('.');
+            let ext = urlParts.length > 1 ? urlParts.pop() : 'png';
+            if (ext.length > 4) ext = 'png'; 
+            
+            const filename = `image_${imageCounter++}.${ext}`;
+            downloadedImages.set(url, { buffer: imgRes.data, filename });
+          }
+          const localFile = downloadedImages.get(url).filename;
+          return match.replace(url, localFile);
+        } catch (e) {
+          console.error("Failed to download image:", url);
+          return match;
+        }
+      }
+      return match;
+    });
+
     formData.append('filecontents[]', content);
     formData.append('filename[]', 'document.tex');
+
+    // Attach all downloaded images
+    for (const [url, imgData] of downloadedImages.entries()) {
+       formData.append('filecontents[]', imgData.buffer, { filename: imgData.filename });
+       formData.append('filename[]', imgData.filename);
+    }
+
     formData.append('engine', engine);
     formData.append('return', 'pdf');
 
