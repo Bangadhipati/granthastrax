@@ -13,10 +13,13 @@ const UPLOADS_DIR = path.join(__dirname, '../uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 } else {
-  // Clean up any left over files from previous runs
+  // Clean up any left over files from previous runs (skip subdirectories)
   const files = fs.readdirSync(UPLOADS_DIR);
   for (const file of files) {
-    fs.unlinkSync(path.join(UPLOADS_DIR, file));
+    const filePath = path.join(UPLOADS_DIR, file);
+    if (fs.statSync(filePath).isFile()) {
+      fs.unlinkSync(filePath);
+    }
   }
 }
 

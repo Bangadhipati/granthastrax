@@ -330,6 +330,10 @@ app.post('/api/compile', requireAuth, async (req, res) => {
 const imageStudioRoutes = require('./routes/imageStudio');
 app.use('/api/image-studio', imageStudioRoutes);
 
+// Document Studio Routes
+const docStudioRoutes = require('./routes/docStudio');
+app.use('/api/doc-studio', docStudioRoutes);
+
 // Basic test route
 app.get('/', (req, res) => {
   res.send('Welcome to the GranthAstraX Backend API');
