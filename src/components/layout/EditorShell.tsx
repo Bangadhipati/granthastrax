@@ -4,15 +4,19 @@ import { EditorTopNav } from "./EditorTopNav";
 export function EditorShell({ 
   children,
   title,
-  onTitleChange
+  onTitleChange,
+  isSaving,
+  lastSaved
 }: { 
   children: ReactNode;
   title?: string;
   onTitleChange?: (newTitle: string) => void;
+  isSaving?: boolean;
+  lastSaved?: Date | null;
 }) {
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background">
-      <EditorTopNav title={title} onTitleChange={onTitleChange} />
+      <EditorTopNav title={title} onTitleChange={onTitleChange} isSaving={isSaving} lastSaved={lastSaved} />
       <main className="flex flex-1 overflow-hidden">{children}</main>
     </div>
   );

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { User, Home, ImageIcon, FileText, FlaskConical, BookOpen, Edit2, LogOut } from "lucide-react";
+import { User, Home, ImageIcon, FileText, FlaskConical, BookOpen, Edit2, LogOut, CloudUpload, CheckCircle2 } from "lucide-react";
 import logoSrc from "@/assets/logo.jpg";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,6 +25,8 @@ export function EditorTopNav({
 }: { 
   title?: string;
   onTitleChange?: (newTitle: string) => void;
+  isSaving?: boolean;
+  lastSaved?: Date | null;
 }) {
   const [localTitle, setLocalTitle] = useState(title);
   useEffect(() => { setLocalTitle(title); }, [title]);
@@ -62,10 +64,23 @@ export function EditorTopNav({
             />
           ) : (
             <>
-              <span className="cursor-pointer truncate text-sm font-medium text-foreground">
+                            <span className="cursor-pointer truncate text-sm font-medium text-foreground">
                 {title}
               </span>
-              <Edit2 className="size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+              <Edit2 className="size-3 text-muted-foreground transition-colors hover:text-foreground" />
+              <div className="flex items-center ml-2 border-l border-border/50 pl-2">
+                {isSaving ? (
+                  <div className="flex items-center gap-1.5 text-blue-400">
+                    <CloudUpload className="size-4 animate-pulse" />
+                    <span className="text-[10px] uppercase tracking-wider font-medium">Saving</span>
+                  </div>
+                ) : lastSaved ? (
+                  <div className="flex items-center gap-1 text-muted-foreground/50 hover:text-muted-foreground transition-colors" title={`Last saved: ${lastSaved.toLocaleTimeString()}`}>
+                    <CheckCircle2 className="size-3.5" />
+                    <span className="text-[10px] uppercase tracking-wider font-medium">Saved</span>
+                  </div>
+                ) : null}
+              </div>
             </>
           )}
         </div>

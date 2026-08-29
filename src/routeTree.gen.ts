@@ -14,6 +14,7 @@ import { Route as DocumentsRouteImport } from './routes/documents'
 import { Route as ImagesRouteImport } from './routes/images'
 import { Route as ResearchRouteImport } from './routes/research'
 import { Route as WriterRouteImport } from './routes/writer'
+import { Route as ResearchProjectIdRouteImport } from './routes/research.$projectId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,42 +41,69 @@ const WriterRoute = WriterRouteImport.update({
   path: '/writer',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResearchProjectIdRoute = ResearchProjectIdRouteImport.update({
+  id: '/$projectId',
+  path: '/$projectId',
+  getParentRoute: () => ResearchRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/documents': typeof DocumentsRoute
   '/images': typeof ImagesRoute
-  '/research': typeof ResearchRoute
+  '/research': typeof ResearchRouteWithChildren
   '/writer': typeof WriterRoute
+  '/research/$projectId': typeof ResearchProjectIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/documents': typeof DocumentsRoute
   '/images': typeof ImagesRoute
-  '/research': typeof ResearchRoute
+  '/research': typeof ResearchRouteWithChildren
   '/writer': typeof WriterRoute
+  '/research/$projectId': typeof ResearchProjectIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/documents': typeof DocumentsRoute
   '/images': typeof ImagesRoute
-  '/research': typeof ResearchRoute
+  '/research': typeof ResearchRouteWithChildren
   '/writer': typeof WriterRoute
+  '/research/$projectId': typeof ResearchProjectIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/documents' | '/images' | '/research' | '/writer'
+  fullPaths:
+    | '/'
+    | '/documents'
+    | '/images'
+    | '/research'
+    | '/writer'
+    | '/research/$projectId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/documents' | '/images' | '/research' | '/writer'
-  id: '__root__' | '/' | '/documents' | '/images' | '/research' | '/writer'
+  to:
+    | '/'
+    | '/documents'
+    | '/images'
+    | '/research'
+    | '/writer'
+    | '/research/$projectId'
+  id:
+    | '__root__'
+    | '/'
+    | '/documents'
+    | '/images'
+    | '/research'
+    | '/writer'
+    | '/research/$projectId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DocumentsRoute: typeof DocumentsRoute
   ImagesRoute: typeof ImagesRoute
-  ResearchRoute: typeof ResearchRoute
+  ResearchRoute: typeof ResearchRouteWithChildren
   WriterRoute: typeof WriterRoute
 }
 
@@ -116,14 +144,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WriterRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/research/$projectId': {
+      id: '/research/$projectId'
+      path: '/$projectId'
+      fullPath: '/research/$projectId'
+      preLoaderRoute: typeof ResearchProjectIdRouteImport
+      parentRoute: typeof ResearchRoute
+    }
   }
 }
+
+interface ResearchRouteChildren {
+  ResearchProjectIdRoute: typeof ResearchProjectIdRoute
+}
+
+const ResearchRouteChildren: ResearchRouteChildren = {
+  ResearchProjectIdRoute: ResearchProjectIdRoute,
+}
+
+const ResearchRouteWithChildren = ResearchRoute._addFileChildren(
+  ResearchRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DocumentsRoute: DocumentsRoute,
   ImagesRoute: ImagesRoute,
-  ResearchRoute: ResearchRoute,
+  ResearchRoute: ResearchRouteWithChildren,
   WriterRoute: WriterRoute,
 }
 export const routeTree = rootRouteImport
