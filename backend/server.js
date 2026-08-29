@@ -334,6 +334,10 @@ app.use('/api/image-studio', imageStudioRoutes);
 const docStudioRoutes = require('./routes/docStudio');
 app.use('/api/doc-studio', docStudioRoutes);
 
+// Writer Desk Routes
+const writerDeskRoutes = require('./routes/writerDesk');
+app.use('/api/writer-desk', writerDeskRoutes);
+
 // Basic test route
 app.get('/', (req, res) => {
   res.send('Welcome to the GranthAstraX Backend API');
