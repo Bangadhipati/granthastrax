@@ -79,46 +79,51 @@ function BookViewer3D({ coverUrl, spineWidth, bookWidth, bookHeight }: { coverUr
       const spineRatio = d / totalW;
       const frontRatio = w / totalW;
 
-      // Materials array (Right, Left, Top, Bottom, Front, Back)
-      // Note: ThreeJS BoxGeometry faces: 0: px, 1: nx, 2: py, 3: ny, 4: pz, 5: nz
+      // Slice the texture for each part
+      const backTexture = texture.clone();
+      backTexture.repeat.set(backRatio, 1);
+      backTexture.offset.set(0, 0);
+
+      const spineTexture = texture.clone();
+      spineTexture.repeat.set(spineRatio, 1);
+      spineTexture.offset.set(backRatio, 0);
+
+      const frontTexture = texture.clone();
+      frontTexture.repeat.set(frontRatio, 1);
+      frontTexture.offset.set(backRatio + spineRatio, 0);
+
       const pageMaterial = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.8 });
       
-      const frontMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.4 });
-      const spineMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.4 });
-      const backMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.4 });
+      const frontMaterial = new THREE.MeshStandardMaterial({ map: frontTexture, roughness: 0.4 });
+      const spineMaterial = new THREE.MeshStandardMaterial({ map: spineTexture, roughness: 0.4 });
+      const backMaterial = new THREE.MeshStandardMaterial({ map: backTexture, roughness: 0.4 });
 
-      // Create a book mesh
-      const geometry = new THREE.BoxGeometry(w, h, d);
-      
-      // UV mapping is complex to get exactly right for a single wraparound texture on a BoxGeometry.
-      // For simplicity in this demo, we'll use solid colors for spine/back if we can't easily map the sub-regions,
-      // OR we can create 3 separate planes grouped together to represent the cover more accurately.
-
-      // Better approach for wraparound: Group of 3 meshes (Front, Spine, Back)
       const bookGroup = new THREE.Group();
 
-      // Front Cover
-      const frontGeo = new THREE.BoxGeometry(w, h, 0.05);
-      const frontMesh = new THREE.Mesh(frontGeo, [pageMaterial, pageMaterial, pageMaterial, pageMaterial, frontMaterial, pageMaterial]);
+      // Front Cover Plane
+      const frontGeo = new THREE.PlaneGeometry(w, h);
+      const frontMesh = new THREE.Mesh(frontGeo, frontMaterial);
       frontMesh.position.set(0, 0, d/2);
       bookGroup.add(frontMesh);
 
-      // Spine
-      const spineGeo = new THREE.BoxGeometry(0.05, h, d);
-      const spineMesh = new THREE.Mesh(spineGeo, pageMaterial); // Simplified to solid color for now
+      // Spine Plane
+      const spineGeo = new THREE.PlaneGeometry(d, h);
+      const spineMesh = new THREE.Mesh(spineGeo, spineMaterial);
       spineMesh.position.set(-w/2, 0, 0);
+      spineMesh.rotation.y = -Math.PI / 2;
       bookGroup.add(spineMesh);
 
-      // Back Cover
-      const backGeo = new THREE.BoxGeometry(w, h, 0.05);
-      const backMesh = new THREE.Mesh(backGeo, [pageMaterial, pageMaterial, pageMaterial, pageMaterial, pageMaterial, backMaterial]);
+      // Back Cover Plane
+      const backGeo = new THREE.PlaneGeometry(w, h);
+      const backMesh = new THREE.Mesh(backGeo, backMaterial);
       backMesh.position.set(0, 0, -d/2);
+      backMesh.rotation.y = Math.PI; // Face backwards
       bookGroup.add(backMesh);
 
-      // Pages (Inner block)
-      const pagesGeo = new THREE.BoxGeometry(w - 0.2, h - 0.2, d - 0.1);
+      // Pages (Inner block) to give thickness to the book
+      const pagesGeo = new THREE.BoxGeometry(w - 0.05, h - 0.05, d - 0.02);
       const pagesMesh = new THREE.Mesh(pagesGeo, pageMaterial);
-      pagesMesh.position.set(0.1, 0, 0);
+      pagesMesh.position.set(0.025, 0, 0); // slightly offset to the right so it doesn't clip the spine
       bookGroup.add(pagesMesh);
 
       // Center the group
@@ -173,68 +178,46 @@ export function WriterView() {
 
   // Output State
   const [spineWidth, setSpineWidth] = useState(0);
+  const [templateUrl, setTemplateUrl] = useState<string | null>(null);
+  const [barcodeUrl, setBarcodeUrl] = useState<string | null>(null);
   const [customCoverFile, setCustomCoverFile] = useState<File | null>(null);
   const [customCoverUrl, setCustomCoverUrl] = useState<string | null>(null);
 
   // --- Handlers ---
   const handleGenerateAssets = async () => {
     setIsGenerating(true);
+    setTemplateUrl(null);
+    setBarcodeUrl(null);
+    
     try {
-      // Fetch spine width first for UI
+      // 1. Fetch spine width
       const spineRes = await api.get(`/api/writer-desk/spine?pageCount=${pageCount}&gsm=${gsm}&coverType=${coverType}`);
       setSpineWidth(spineRes.data.spineWidth);
+
+      // 2. Fetch template base64
+      const templateRes = await api.post("/api/writer-desk/template", {
+        trimWidth: selectedSize.w, trimHeight: selectedSize.h,
+        pageCount, paperGSM: gsm, coverType, bookTitle: title, authorName: author
+      });
+      setTemplateUrl(templateRes.data.base64);
+
+      // 3. Fetch barcode base64 (if ISBN provided)
+      if (isbn) {
+        try {
+          const barcodeRes = await api.post("/api/writer-desk/barcode", { isbn, price, currency });
+          setBarcodeUrl(barcodeRes.data.base64);
+        } catch (err) {
+          console.error("Barcode generation failed", err);
+          alert("Failed to generate barcode. Ensure ISBN is valid (10 or 13 digits).");
+        }
+      }
 
       setStage(2);
     } catch (error) {
       console.error("Error generating assets:", error);
-      alert("Failed to calculate book specifications.");
+      alert("Failed to calculate book specifications or generate template.");
     } finally {
       setIsGenerating(false);
-    }
-  };
-
-  const downloadTemplate = async () => {
-    try {
-      const response = await api.post("/api/writer-desk/template", {
-        trimWidth: selectedSize.w,
-        trimHeight: selectedSize.h,
-        pageCount,
-        paperGSM: gsm,
-        coverType,
-        bookTitle: title,
-        authorName: author
-      }, { responseType: 'blob' });
-      
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'cover-template.pdf');
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (error) {
-      console.error("Template download failed", error);
-      alert("Failed to generate template PDF.");
-    }
-  };
-
-  const downloadBarcode = async () => {
-    if (!isbn) return alert("Please enter an ISBN first.");
-    try {
-      const response = await api.post("/api/writer-desk/barcode", {
-        isbn, price, currency
-      }, { responseType: 'blob' });
-      
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'barcode.png');
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (error) {
-      console.error("Barcode generation failed", error);
-      alert("Failed to generate barcode. Ensure ISBN is valid (10 or 13 digits).");
     }
   };
 
@@ -387,30 +370,50 @@ export function WriterView() {
             </Panel>
 
             <div className="grid md:grid-cols-2 gap-6">
-              <Panel className="flex flex-col items-center text-center p-8">
-                <div className="bg-primary/10 p-4 rounded-full mb-4">
-                  <Ruler className="w-8 h-8 text-primary"/>
+              <Panel className="flex flex-col text-center p-6">
+                <div className="flex items-center justify-center bg-primary/10 w-12 h-12 rounded-full mx-auto mb-4">
+                  <Ruler className="w-6 h-6 text-primary"/>
                 </div>
                 <h3 className="text-lg font-medium">Cover Template (PDF)</h3>
-                <p className="text-xs text-muted-foreground mt-2 mb-6">
-                  Full wraparound cover template including spine width, 3mm bleed area, and 5mm safe zones. Import this into Canva as a background guide.
+                <p className="text-xs text-muted-foreground mt-2 mb-4">
+                  Wraparound template including spine width ({spineWidth} mm), 3mm bleed, and 5mm safe zones.
                 </p>
-                <button onClick={downloadTemplate} className="w-full py-2 bg-secondary text-foreground border border-border rounded-md hover:bg-secondary/80 flex items-center justify-center gap-2 text-sm font-medium transition">
-                  <Download className="w-4 h-4"/> Download Template
-                </button>
+                {templateUrl ? (
+                  <div className="flex-1 w-full bg-muted/30 border border-border rounded-md overflow-hidden mb-4 relative aspect-[3/2]">
+                    <iframe src={`${templateUrl}#toolbar=0&view=FitH`} className="w-full h-full border-0 absolute inset-0" title="Template Preview"/>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center bg-muted/10 border border-border rounded-md mb-4 aspect-[3/2]">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground"/>
+                  </div>
+                )}
+                <a href={templateUrl || "#"} download={`template-${selectedSize.name.replace(/\s+/g, '-').toLowerCase()}.pdf`} className={`w-full py-2 bg-secondary text-foreground border border-border rounded-md hover:bg-secondary/80 flex items-center justify-center gap-2 text-sm font-medium transition ${!templateUrl ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <Download className="w-4 h-4"/> Download PDF
+                </a>
               </Panel>
 
-              <Panel className={`flex flex-col items-center text-center p-8 ${!isbn ? 'opacity-50' : ''}`}>
-                <div className="bg-primary/10 p-4 rounded-full mb-4">
-                  <Barcode className="w-8 h-8 text-primary"/>
+              <Panel className={`flex flex-col text-center p-6 ${!isbn ? 'opacity-50' : ''}`}>
+                <div className="flex items-center justify-center bg-primary/10 w-12 h-12 rounded-full mx-auto mb-4">
+                  <Barcode className="w-6 h-6 text-primary"/>
                 </div>
                 <h3 className="text-lg font-medium">ISBN Barcode (PNG)</h3>
-                <p className="text-xs text-muted-foreground mt-2 mb-6">
-                  {isbn ? `Standard EAN-13 barcode for ISBN ${isbn} with optional 5-digit price supplement.` : 'Provide an ISBN in Step 1 to generate a barcode.'}
+                <p className="text-xs text-muted-foreground mt-2 mb-4">
+                  {isbn ? `EAN-13 barcode for ISBN ${isbn} with optional price tag.` : 'Provide an ISBN in Step 1 to generate a barcode.'}
                 </p>
-                <button onClick={downloadBarcode} disabled={!isbn} className="w-full py-2 bg-secondary text-foreground border border-border rounded-md hover:bg-secondary/80 flex items-center justify-center gap-2 text-sm font-medium transition disabled:cursor-not-allowed">
-                  <Download className="w-4 h-4"/> Download Barcode
-                </button>
+                
+                <div className="flex-1 w-full bg-white border border-border rounded-md overflow-hidden mb-4 flex items-center justify-center p-4 min-h-[160px]">
+                  {barcodeUrl ? (
+                    <img src={barcodeUrl} alt="ISBN Barcode" className="max-w-full max-h-32 object-contain" />
+                  ) : isbn ? (
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground"/>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">No ISBN provided</span>
+                  )}
+                </div>
+                
+                <a href={barcodeUrl || "#"} download={`barcode-${isbn}.png`} className={`w-full py-2 bg-secondary text-foreground border border-border rounded-md hover:bg-secondary/80 flex items-center justify-center gap-2 text-sm font-medium transition ${!barcodeUrl ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <Download className="w-4 h-4"/> Download PNG
+                </a>
               </Panel>
             </div>
 
@@ -456,7 +459,7 @@ export function WriterView() {
             <div className="flex justify-between">
               <button onClick={() => setStage(2)} className="text-sm text-muted-foreground hover:text-foreground underline">← Back to Assets</button>
               <label className="cursor-pointer border border-border bg-secondary text-foreground px-4 py-2 rounded-md font-medium hover:bg-secondary/80 transition text-sm">
-                <input type="file" accept="image/png, image/jpeg" className="hidden" onChange={handleCoverUpload} />
+                <input type="file" accept="image/png, image/jpeg" className="hidden" onClick={(e) => { (e.target as HTMLInputElement).value = ''; }} onChange={handleCoverUpload} />
                 Upload Different Cover
               </label>
             </div>

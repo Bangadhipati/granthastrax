@@ -3,14 +3,13 @@ const router = express.Router();
 const PDFDocument = require('pdfkit');
 const bwipjs = require('bwip-js');
 
-// ── GSM → spine thickness per SHEET (both pages) in mm ──────────────────────
-const GSM_THICKNESS = { 50: 0.05, 70: 0.075, 80: 0.09, 100: 0.11, 120: 0.13 };
+// ── GSM → spine thickness per PAGE in mm ──────────────────────────────────
+const GSM_THICKNESS = { 50: 0.05, 70: 0.0572, 80: 0.0635, 100: 0.07, 120: 0.08 };
 const MM_TO_PT = 2.8346;
 
 function calcSpine(pageCount, gsm, coverType) {
-  const sheetCount = Math.ceil(pageCount / 2);
-  const thickness = GSM_THICKNESS[gsm] ?? 0.09;
-  let spineWidth = sheetCount * thickness;
+  const thickness = GSM_THICKNESS[gsm] ?? 0.0635;
+  let spineWidth = pageCount * thickness;
   if (coverType === 'hardcover') spineWidth += 6;
   return Math.max(spineWidth, 3); // minimum 3mm
 }
@@ -53,9 +52,15 @@ router.post('/template', async (req, res) => {
       }
     });
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="cover-template.pdf"`);
-    doc.pipe(res);
+    // Buffering PDF for base64 response
+    const chunks = [];
+    doc.on('data', chunk => chunks.push(chunk));
+    doc.on('end', () => {
+      const resultBuffer = Buffer.concat(chunks);
+      res.json({
+        base64: `data:application/pdf;base64,${resultBuffer.toString('base64')}`
+      });
+    });
 
     // ── Background: light grey ─────────────────────────────────────────────
     doc.rect(0, 0, toPt(totalW), toPt(totalH)).fill('#f5f5f5');
@@ -172,20 +177,19 @@ router.post('/barcode', async (req, res) => {
 
     const pngBuffer = await bwipjs.toBuffer({
       bcid: 'isbn',
-      text: barcodeText,
+      text: barcodeText + (addon ? `-${addon}` : ''), // bwipjs isbn type handles addons if appended with dash
       scale: 4,
       height: 30,
       includetext: true,
       textxalign: 'center',
       paddingwidth: 10,
       paddingheight: 10,
-      backgroundcolor: 'ffffff',
-      ...(addon ? { addontextxalign: 'center', addon } : {}),
+      backgroundcolor: 'ffffff'
     });
 
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Content-Disposition', `attachment; filename="isbn-barcode.png"`);
-    res.send(pngBuffer);
+    res.json({
+      base64: `data:image/png;base64,${pngBuffer.toString('base64')}`
+    });
   } catch (err) {
     console.error('Writer Desk barcode error:', err);
     if (!res.headersSent) res.status(500).json({ error: err.message });
