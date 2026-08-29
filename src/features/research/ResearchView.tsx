@@ -285,19 +285,10 @@ function Editor({ projectId, onBack }: { projectId: string; onBack: () => void }
     const handleCompile = async () => {
     setIsCompiling(true);
     try {
-      const formData = new FormData();
-      formData.append("filecontents[]", latexContent);
-      formData.append("filename[]", "document.tex");
-      formData.append("engine", "pdflatex");
-      formData.append("return", "pdf");
-
-      const res = await fetch("https://texlive.net/cgi-bin/latexcgi", {
-        method: "POST",
-        body: formData,
-      });
+      const res = await api.post("/api/compile", { content: latexContent }, { responseType: 'blob' });
       
-      if (res.ok) {
-        const blob = await res.blob();
+      if (res.status === 200) {
+        const blob = res.data;
         setPdfUrl(URL.createObjectURL(blob));
         setPageNumber(1);
       } else {

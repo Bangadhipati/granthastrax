@@ -113,6 +113,38 @@ app.delete('/api/projects/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Compile LaTeX via texlive.net proxy to avoid frontend CORS
+app.post('/api/compile', requireAuth, async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content) {
+      return res.status(400).json({ error: 'LaTeX content is required' });
+    }
+
+    const FormData = require('form-data');
+    const axios = require('axios');
+    const formData = new FormData();
+    formData.append('filecontents[]', content);
+    formData.append('filename[]', 'document.tex');
+    formData.append('engine', 'pdflatex');
+    formData.append('return', 'pdf');
+
+    const response = await axios.post('https://texlive.net/cgi-bin/latexcgi', formData, {
+      headers: formData.getHeaders(),
+      responseType: 'arraybuffer'
+    });
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="document.pdf"',
+    });
+    res.send(response.data);
+  } catch (error) {
+    console.error('Compilation proxy error:', error);
+    res.status(500).json({ error: 'Failed to compile LaTeX' });
+  }
+});
+
 // Basic test route
 app.get('/', (req, res) => {
   res.send('Welcome to the GranthAstraX Backend API');

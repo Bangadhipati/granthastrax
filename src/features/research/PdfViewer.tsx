@@ -59,13 +59,19 @@ export function PdfViewer({
   if (!PdfComponents) {
     if (pdfUrl) {
       return (
-        <div className="flex h-[400px] w-[210mm] items-center justify-center bg-white shadow-xl">
+        <div 
+          className="flex h-[400px] w-[210mm] items-center justify-center bg-white shadow-xl"
+          style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top center', transition: 'transform 0.2s ease-in-out' }}
+        >
           <Loader2 className="size-8 animate-spin text-gold" />
         </div>
       );
     }
     return (
-      <div className="flex h-[297mm] w-[210mm] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground/60">
+      <div 
+        className="flex h-[297mm] w-[210mm] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground/60"
+        style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top center', transition: 'transform 0.2s ease-in-out' }}
+      >
         <p>Click "Compile" to generate PDF</p>
       </div>
     );
@@ -97,7 +103,10 @@ export function PdfViewer({
   }
 
   return (
-    <div className="flex h-[297mm] w-[210mm] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground/60">
+    <div 
+      className="flex h-[297mm] w-[210mm] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground/60"
+      style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top center', transition: 'transform 0.2s ease-in-out' }}
+    >
       <p>Click "Compile" to generate PDF</p>
     </div>
   );
