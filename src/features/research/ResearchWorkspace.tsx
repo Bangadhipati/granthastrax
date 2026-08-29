@@ -107,6 +107,12 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
       
       if (res.status === 200) {
         const blob = res.data;
+        if (blob.type && !blob.type.includes('pdf')) {
+          const text = await blob.text();
+          console.error("Compilation Error Log:", text);
+          alert("Compilation failed! Check the console for the full LaTeX error log.\n\n" + text.substring(0, 500) + "...");
+          return;
+        }
         const url = URL.createObjectURL(blob);
         setPdfUrl(url);
       } else {
