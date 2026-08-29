@@ -326,6 +326,10 @@ app.post('/api/compile', requireAuth, async (req, res) => {
   }
 });
 
+// Image Studio Routes
+const imageStudioRoutes = require('./routes/imageStudio');
+app.use('/api/image-studio', requireAuth, imageStudioRoutes);
+
 // Basic test route
 app.get('/', (req, res) => {
   res.send('Welcome to the GranthAstraX Backend API');
