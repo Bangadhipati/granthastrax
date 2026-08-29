@@ -12,7 +12,7 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 pt-8 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 pt-32 sm:flex-row sm:items-end sm:justify-between">
       <div className="max-w-3xl">
         <p className="text-[11px] uppercase tracking-[0.32em] text-gold">{eyebrow}</p>
         <h1 className="mt-3 text-4xl sm:text-5xl">{title}</h1>
