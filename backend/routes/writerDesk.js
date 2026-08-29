@@ -161,23 +161,31 @@ router.post('/barcode', async (req, res) => {
     }
 
     const cleanIsbn = isbn.replace(/-/g, '').replace(/\s/g, '');
+    let base12 = cleanIsbn.substring(0, 12);
+    
+    // Auto-calculate the correct check digit for EAN-13 to prevent bwip-js crashes
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      sum += parseInt(base12[i] || '0', 10) * (i % 2 === 0 ? 1 : 3);
+    }
+    const checkDigit = (10 - (sum % 10)) % 10;
+    const validIsbn = base12.padEnd(12, '0') + checkDigit;
 
     // Build barcode text — price add-on is a 5-digit UPC supplement
-    let barcodeText = cleanIsbn;
+    let barcodeText = validIsbn;
     let addon = '';
     if (price) {
       const priceNum = parseFloat(price);
       if (!isNaN(priceNum)) {
         // Encode price: 5-digit supplement (9XXXX = price in local currency cents)
-        // Standard: 90000 = no price, 9XXXX = price in USD cents, etc.
         const encoded = Math.min(99999, Math.round(priceNum * 100));
         addon = String(encoded).padStart(5, '0');
       }
     }
 
     const pngBuffer = await bwipjs.toBuffer({
-      bcid: 'isbn',
-      text: barcodeText + (addon ? `-${addon}` : ''), // bwipjs isbn type handles addons if appended with dash
+      bcid: 'ean13',
+      text: barcodeText + (addon ? `-${addon}` : ''),
       scale: 4,
       height: 30,
       includetext: true,
