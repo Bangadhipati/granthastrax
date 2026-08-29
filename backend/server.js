@@ -316,7 +316,7 @@ app.post('/api/compile', requireAuth, async (req, res) => {
     });
 
     res.set({
-      'Content-Type': 'application/pdf',
+      'Content-Type': response.headers['content-type'] || 'application/pdf',
       'Content-Disposition': 'inline; filename="document.pdf"',
     });
     res.send(response.data);

@@ -99,6 +99,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
 
   const handleCompile = async () => {
     setIsCompiling(true);
+    setPdfUrl(null); // Clear previous PDF
     try {
       const res = await api.post("/api/compile", { 
         content: latexContent,
