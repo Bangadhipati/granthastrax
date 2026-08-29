@@ -8,7 +8,7 @@ export function HeroSection() {
       <HeroBackground />
       
       {/* Content Container */}
-      <div className="relative mx-auto max-w-7xl px-6 pb-14 pt-20 sm:pb-24 sm:pt-24">
+      <div className="relative mx-auto max-w-7xl px-6 pb-14 pt-32 sm:pb-24 sm:pt-40">
         <p className="text-[11px] uppercase tracking-[0.32em] text-gold">
           A studio for serious work
         </p>

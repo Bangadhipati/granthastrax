@@ -14,7 +14,7 @@ export function TopNav() {
   const { user, logout } = useAuth();
 
   return (
-    <div className="sticky top-4 z-50 mx-auto max-w-7xl px-4 sm:px-6">
+    <div className="fixed top-4 left-0 right-0 w-full z-50 mx-auto max-w-7xl px-4 sm:px-6">
       <header className="flex w-full items-center justify-between rounded-2xl border border-border/50 bg-background/70 px-6 py-2.5 shadow-xl shadow-black/10 backdrop-blur-xl">
         <Link to="/" className="group flex items-center gap-2.5">
           <span className="grid size-9 place-items-center overflow-hidden rounded-full border border-gold/40 bg-background shadow-sm">
