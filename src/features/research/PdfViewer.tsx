@@ -48,10 +48,13 @@ export function PdfViewer({
 
   if (isCompiling) {
     return (
-      <div className="flex h-[400px] w-[210mm] items-center justify-center bg-white shadow-xl">
+      <div 
+        className="flex h-[297mm] w-[210mm] items-center justify-center bg-white shadow-xl transition-transform duration-75 origin-top animate-pulse"
+        style={{ transform: `scale(${previewZoom})` }}
+      >
         <div className="flex flex-col items-center gap-4 text-muted-foreground">
           <Loader2 className="size-8 animate-spin text-gold" />
-          <p>Compiling LaTeX via API...</p>
+          <p className="font-medium text-black">Building Document...</p>
         </div>
       </div>
     );
@@ -114,10 +117,14 @@ export function PdfViewer({
 
   return (
     <div 
-      className="flex h-[297mm] w-[210mm] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground/60 transition-transform duration-75 origin-top"
+      className="flex h-[297mm] w-[210mm] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground transition-transform duration-75 origin-top"
       style={{ transform: `scale(${previewZoom})` }}
     >
-      <p>Click "Compile" to generate PDF</p>
+      <div className="flex flex-col items-center gap-3 opacity-50">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mb-2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <p className="text-lg font-medium">Ready to Compile</p>
+        <p className="text-sm">Click "Compile to PDF" to generate your document</p>
+      </div>
     </div>
   );
 }

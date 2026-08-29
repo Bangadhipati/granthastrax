@@ -116,7 +116,25 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
         const url = URL.createObjectURL(blob);
         setPdfUrl(url);
       } else {
-        alert("Compilation failed. Please check your LaTeX syntax.");
+        const text = await blob.text();
+        
+        let errorMsg = "Compilation failed. Please check your LaTeX syntax.";
+        
+        // Intelligent error parsing
+        if (text.includes("fontspec") || text.includes("TU/")) {
+          errorMsg = "Your code uses 'fontspec' or a custom font, which requires XeLaTeX or LuaLaTeX. Please click the Project Settings icon in the sidebar and change your compiler to LuaLaTeX.";
+        } else if (text.includes("bidi-only-lua") || text.includes("bidi=basic")) {
+          errorMsg = "Your code uses a babel/bidi configuration that requires LuaLaTeX. Please click Project Settings and change your compiler to LuaLaTeX.";
+        } else {
+          // Extract the first actual LaTeX error line if possible
+          const match = text.match(/! (.*?)\n/);
+          if (match) {
+            errorMsg = `LaTeX Error: ${match[1]}\n\nPlease fix the error in your code and try again.`;
+          }
+        }
+        
+        alert(errorMsg + "\n\n(Check the console for the full LaTeX error log)");
+        console.error("LaTeX Compilation Log:\n", text);
       }
     } catch (error) {
       console.error(error);
