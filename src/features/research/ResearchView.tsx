@@ -49,7 +49,7 @@ export function ResearchView() {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setDialogOpen(false);
       setNewProjectName("");
-      window.open(`/research/${data._id}`, '_blank');
+      window.location.href = `/research/${data._id}`;
     },
   });
 
@@ -138,11 +138,16 @@ export function ResearchView() {
                 {projects?.map((p: any) => (
                   <TableRow
                     key={p._id}
-                    onClick={() => window.open(`/research/${p._id}`, '_blank')}
+                    onClick={() => window.location.href = `/research/${p._id}`}
                     className="cursor-pointer group"
                   >
                     <TableCell className="font-medium">{p.title}</TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="text-muted-foreground text-sm">
+                      {p.lastEditedBy && (
+                         <span className="text-foreground">
+                           Edited by {p.lastEditedBy.length > 15 ? p.lastEditedBy.substring(0, 15) + '...' : p.lastEditedBy} &bull;{" "}
+                         </span>
+                      )}
                       {p.updatedAt ? formatDistanceToNow(new Date(p.updatedAt), { addSuffix: true }) : 'Unknown'}
                     </TableCell>
                     <TableCell className="text-right">

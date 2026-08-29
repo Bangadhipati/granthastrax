@@ -35,16 +35,28 @@ const requireAuth = (req, res, next) => {
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized. User ID is missing.' });
   }
+  
+  // Parse additional identities (emails, GitHub usernames)
+  const identifiersStr = req.headers['x-user-identifiers'] || '';
+  const identifiers = identifiersStr.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  
   req.userId = userId;
+  req.userIdentifiers = identifiers; // array of strings
+  req.userName = req.headers['x-user-name'] || 'Unknown User';
   next();
 };
 
 // --- Project Routes ---
 
-// Get all projects for the logged-in user
+// Get all projects for the logged-in user (owned or collaborated)
 app.get('/api/projects', requireAuth, async (req, res) => {
   try {
-    const projects = await Project.find({ userId: req.userId }).sort({ updatedAt: -1 });
+    const projects = await Project.find({
+      $or: [
+        { userId: req.userId },
+        { collaboratorIdentifiers: { $in: req.userIdentifiers } }
+      ]
+    }).sort({ updatedAt: -1 });
     res.json(projects);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch projects' });
@@ -69,12 +81,19 @@ app.post('/api/projects', requireAuth, async (req, res) => {
   }
 });
 
-// Get a single project by ID
+// Get a single project by ID (must be owner or collaborator)
 app.get('/api/projects/:id', requireAuth, async (req, res) => {
   try {
-    const project = await Project.findOne({ _id: req.params.id, userId: req.userId });
+    const project = await Project.findOne({ 
+      _id: req.params.id,
+      $or: [
+        { userId: req.userId },
+        { collaboratorIdentifiers: { $in: req.userIdentifiers } }
+      ]
+    });
+    
     if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
+      return res.status(404).json({ error: 'Project not found or unauthorized' });
     }
     res.json(project);
   } catch (error) {
@@ -82,21 +101,67 @@ app.get('/api/projects/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Update a project's content (Autosave/Manual Save)
+// Update a project's content (Autosave/Manual Save) - allowed for owners & collaborators
 app.put('/api/projects/:id', requireAuth, async (req, res) => {
   try {
     const { title, content, editorState } = req.body;
-    const project = await Project.findOneAndUpdate(
-      { _id: req.params.id, userId: req.userId },
-      { $set: { ...(title && { title }), ...(content !== undefined && { content }), ...(editorState !== undefined && { editorState }) } },
-      { new: true }
-    );
+    
+    // First, verify access
+    const project = await Project.findOne({ 
+      _id: req.params.id,
+      $or: [
+        { userId: req.userId },
+        { collaboratorIdentifiers: { $in: req.userIdentifiers } }
+      ]
+    });
+
     if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
+      return res.status(404).json({ error: 'Project not found or unauthorized' });
     }
+
+    // Determine what to update
+    if (title) project.title = title;
+    if (content !== undefined) project.content = content;
+    if (editorState !== undefined) project.editorState = editorState;
+    
+    project.lastEditedBy = req.userName;
+    
+    await project.save();
     res.json(project);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update project' });
+  }
+});
+
+// Manage Collaborators (Add/Remove) - ONLY owners
+app.post('/api/projects/:id/collaborators', requireAuth, async (req, res) => {
+  try {
+    const { identifier, action } = req.body; // action: 'add' or 'remove'
+    if (!identifier || !action) {
+      return res.status(400).json({ error: 'Missing identifier or action' });
+    }
+
+    // Must be owner to add collaborators
+    const project = await Project.findOne({ _id: req.params.id, userId: req.userId });
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found or you are not the owner' });
+    }
+
+    const cleanId = identifier.trim().toLowerCase();
+    
+    if (action === 'add') {
+      if (!project.collaboratorIdentifiers.includes(cleanId)) {
+        project.collaboratorIdentifiers.push(cleanId);
+      }
+    } else if (action === 'remove') {
+      project.collaboratorIdentifiers = project.collaboratorIdentifiers.filter(id => id !== cleanId);
+    }
+
+    await project.save();
+    res.json(project);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to manage collaborators' });
   }
 });
 

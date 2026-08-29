@@ -18,6 +18,14 @@ const ProjectSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  collaboratorIdentifiers: {
+    type: [String],
+    default: [],
+  },
+  lastEditedBy: {
+    type: String,
+    default: '',
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Project', ProjectSchema);

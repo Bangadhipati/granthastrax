@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { EditorShell } from "@/components/layout/EditorShell";
 import { ResearchSidebar } from "./ResearchSidebar";
 import { TipTapEditor } from "./TipTapEditor";
+import { ShareModal } from "./ShareModal";
+import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { 
   Loader2, Play, Download, ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
@@ -57,6 +59,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [isInitialized, setIsInitialized] = useState(false);
   
@@ -203,6 +206,9 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
            </div>
           
           <div className="flex items-center gap-2">
+            {project?.userId === user?.uid && (
+               <ShareModal project={project} />
+            )}
             <button
               type="button"
               onClick={handleCompile}
