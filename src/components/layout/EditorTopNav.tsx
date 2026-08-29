@@ -21,7 +21,9 @@ const items = [
 
 export function EditorTopNav({ 
   title = "Graph Attention for Protein Folding", 
-  onTitleChange 
+  onTitleChange,
+  isSaving,
+  lastSaved
 }: { 
   title?: string;
   onTitleChange?: (newTitle: string) => void;
