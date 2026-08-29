@@ -57,14 +57,24 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const queryClient = useQueryClient();
 
+  const [isInitialized, setIsInitialized] = useState(false);
+  
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
     queryFn: async () => {
       const res = await api.get(`/api/projects/${projectId}`);
-      setLatexContent(res.data.content || "");
       return res.data;
     },
+    staleTime: Infinity,
   });
+
+  // Initialize editor content once
+  useEffect(() => {
+    if (project && !isInitialized) {
+      setLatexContent(project.content || "");
+      setIsInitialized(true);
+    }
+  }, [project, isInitialized]);
 
   const saveMutation = useMutation({
     mutationFn: async (payload: { title?: string, content?: string }) => {
@@ -72,22 +82,32 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
       return res.data;
     },
     onMutate: () => setIsSaving(true),
-    onSuccess: () => {
+    onSuccess: (data, payload) => {
       setIsSaving(false);
       setLastSaved(new Date());
-      queryClient.setQueryData(['project', projectId], (old: any) => ({ ...old, content: payload.content || old.content, title: payload.title || old.title }));
+      queryClient.setQueryData(['project', projectId], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          content: payload.content !== undefined ? payload.content : old.content,
+          title: payload.title !== undefined ? payload.title : old.title,
+        };
+      });
     },
     onError: () => setIsSaving(false),
   });
 
   // Debounced Autosave
   useEffect(() => {
-    if (!project || latexContent === project.content) return;
+    if (!project || !isInitialized) return;
+    const currentProjectContent = project.content || "";
+    if (latexContent === currentProjectContent) return;
+
     const timeout = setTimeout(() => {
       saveMutation.mutate({ content: latexContent });
     }, 1500);
     return () => clearTimeout(timeout);
-  }, [latexContent, project, saveMutation]);
+  }, [latexContent, project?.content, isInitialized, saveMutation.mutate]);
 
 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
