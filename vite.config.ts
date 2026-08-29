@@ -49,4 +49,9 @@ export default defineConfig(({ command }) => ({
     tailwindcss(),
     tsconfigPaths(),
   ],
+  server: {
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+    },
+  },
 }));
