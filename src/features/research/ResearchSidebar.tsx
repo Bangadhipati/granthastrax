@@ -16,11 +16,13 @@ interface ProjectImage {
 export function ResearchSidebar({ 
   projectId, 
   project, 
+  latexContent,
   onCompilerChange,
   onInsertImage
 }: { 
   projectId: string;
   project: any;
+  latexContent: string;
   onCompilerChange: (compiler: string) => void;
   onInsertImage: (url: string, name: string) => void;
 }) {
@@ -33,6 +35,16 @@ export function ResearchSidebar({
 
   const compiler = project?.compiler || 'pdflatex';
   const images: ProjectImage[] = project?.images || [];
+
+  const outline = latexContent
+    .split("\n")
+    .map(line => {
+      const match = line.match(/\\(section|subsection|subsubsection)\{([^}]+)\}/);
+      if (match) return match[2];
+      return null;
+    })
+    .filter(Boolean) as string[];
+  const displayOutline = outline.length > 0 ? outline : ["Abstract", "Introduction"];
 
   const handleCompilerChange = (val: string) => {
     onCompilerChange(val);
@@ -130,7 +142,7 @@ export function ResearchSidebar({
           </p>
         </div>
 
-        <Accordion type="multiple" defaultValue={["files", "images"]} className="w-full">
+        <Accordion type="multiple" defaultValue={["files", "outline", "images"]} className="w-full">
           {/* File Tree Section */}
           <AccordionItem value="files" className="border-b-0 px-4">
             <AccordionTrigger className="py-2 text-xs font-semibold text-foreground hover:no-underline">
@@ -142,6 +154,26 @@ export function ResearchSidebar({
                   <FileText className="size-3.5" />
                   <span>main.tex</span>
                 </li>
+              </ul>
+            </AccordionContent>
+          </AccordionItem>
+
+          {/* Outline Section */}
+          <AccordionItem value="outline" className="border-b-0 px-4">
+            <AccordionTrigger className="py-2 text-xs font-semibold text-foreground hover:no-underline">
+              Outline
+            </AccordionTrigger>
+            <AccordionContent className="pt-1">
+              <ul className="space-y-1">
+                {displayOutline.map((heading, i) => (
+                  <li
+                    key={i}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  >
+                    <Hash className="size-3 text-gold/50" />
+                    <span className="truncate">{heading}</span>
+                  </li>
+                ))}
               </ul>
             </AccordionContent>
           </AccordionItem>

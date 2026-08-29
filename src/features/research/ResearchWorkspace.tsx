@@ -160,6 +160,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
       <ResearchSidebar 
         projectId={projectId} 
         project={project}
+        latexContent={latexContent}
         onCompilerChange={(compiler) => saveMutation.mutate({ compiler })}
         onInsertImage={(url, name) => insertTextAtCursor(`\\includegraphics{${url}} % ${name}\n`)}
       />
@@ -295,6 +296,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
                   pdfUrl={pdfUrl}
                   isCompiling={isCompiling}
                   pageNumber={pageNumber}
+                  numPages={numPages}
                   previewZoom={previewZoom}
                   onLoadSuccess={onDocumentLoadSuccess}
                 />
