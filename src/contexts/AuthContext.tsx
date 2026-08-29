@@ -4,6 +4,9 @@ import {
   signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updatePassword
 } from "firebase/auth";
 import { auth, googleProvider, githubProvider } from "@/lib/firebase";
 
@@ -12,6 +15,9 @@ interface AuthContextType {
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithGithub: () => Promise<void>;
+  signInWithEmail: (email: string, pass: string) => Promise<void>;
+  signUpWithEmail: (email: string, pass: string) => Promise<void>;
+  updateUserPassword: (newPass: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -54,6 +60,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signInWithEmail = async (email: string, pass: string) => {
+    if (!auth) throw new Error("Firebase auth not initialized");
+    await signInWithEmailAndPassword(auth, email, pass);
+  };
+
+  const signUpWithEmail = async (email: string, pass: string) => {
+    if (!auth) throw new Error("Firebase auth not initialized");
+    await createUserWithEmailAndPassword(auth, email, pass);
+  };
+
+  const updateUserPassword = async (newPass: string) => {
+    if (!auth || !auth.currentUser) throw new Error("Not logged in");
+    await updatePassword(auth.currentUser, newPass);
+  };
+
   const logout = async () => {
     if (!auth) throw new Error("Firebase auth not initialized");
     try {
@@ -71,6 +92,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         signInWithGoogle,
         signInWithGithub,
+        signInWithEmail,
+        signUpWithEmail,
+        updateUserPassword,
         logout,
       }}
     >

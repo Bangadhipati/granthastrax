@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { User, LogOut } from "lucide-react";
 import logoSrc from "@/assets/logo.jpg";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { SettingsModal } from "@/components/auth/SettingsModal";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
@@ -9,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Settings } from "lucide-react";
 
 export function TopNav() {
   const { user, logout } = useAuth();
@@ -49,11 +51,17 @@ export function TopNav() {
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 bg-background/95 backdrop-blur-xl border-border/50 shadow-xl rounded-xl">
-              <div className="px-2 py-1.5 text-sm text-foreground font-medium truncate">
+            <DropdownMenuContent align="end" className="w-48 bg-background/95 backdrop-blur-xl border-border/50 shadow-xl rounded-xl p-1">
+              <div className="px-2 py-2 text-sm text-foreground font-medium truncate border-b border-border/50 mb-1">
                 {user.displayName || user.email}
               </div>
-              <DropdownMenuItem onClick={() => logout()} className="text-red-500 focus:bg-red-500/10 focus:text-red-500 cursor-pointer rounded-lg">
+              <SettingsModal>
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="cursor-pointer rounded-lg hover:bg-secondary/50 focus:bg-secondary/50 mb-1">
+                  <Settings className="mr-2 size-4 text-muted-foreground" />
+                  Settings
+                </DropdownMenuItem>
+              </SettingsModal>
+              <DropdownMenuItem onClick={() => logout()} className="text-red-500 focus:bg-red-500/10 hover:bg-red-500/10 focus:text-red-500 cursor-pointer rounded-lg">
                 <LogOut className="mr-2 size-4" />
                 Sign out
               </DropdownMenuItem>
