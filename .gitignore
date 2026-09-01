@@ -38,3 +38,4 @@ dist-ssr
 
 # Local Netlify folder
 .netlify
+combined_project_files.txt
