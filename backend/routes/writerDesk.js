@@ -161,7 +161,7 @@ router.post('/barcode', async (req, res) => {
     }
 
     const cleanIsbn = isbn.replace(/-/g, '').replace(/\s/g, '');
-    let base12 = cleanIsbn.substring(0, 12);
+    let base12 = cleanIsbn.substring(0, 12).padEnd(12, '0');
     
     // Auto-calculate the correct check digit for EAN-13 to prevent bwip-js crashes
     let sum = 0;
@@ -169,27 +169,36 @@ router.post('/barcode', async (req, res) => {
       sum += parseInt(base12[i] || '0', 10) * (i % 2 === 0 ? 1 : 3);
     }
     const checkDigit = (10 - (sum % 10)) % 10;
-    const validIsbn = base12.padEnd(12, '0') + checkDigit;
+    
+    // Format perfectly to 17 characters (e.g. 978-0-12-345678-6)
+    // This satisfies bwip-js 'isbn' bcid requirement and triggers native "ISBN ..." top text
+    const validIsbn = `${base12.substring(0,3)}-${base12.substring(3,4)}-${base12.substring(4,6)}-${base12.substring(6,12)}-${checkDigit}`;
 
-    // Build barcode text — price add-on is a 5-digit UPC supplement
+    // Build barcode text
     let barcodeText = validIsbn;
-    let addon = '';
+    let addonCode = '';
+    let formattedPrice = '';
+    
     if (price) {
       const priceNum = parseFloat(price);
       if (!isNaN(priceNum)) {
         // Encode price: 5-digit supplement (9XXXX = price in local currency cents)
         const encoded = Math.min(99999, Math.round(priceNum * 100));
-        addon = String(encoded).padStart(5, '0');
+        addonCode = String(encoded).padStart(5, '0');
+        // Space separates the ISBN from the addon code for bwip-js isbn type
+        barcodeText = `${validIsbn} ${addonCode}`;
+        // Human-readable text under the addon bars
+        formattedPrice = `${currency || ''} ${priceNum.toFixed(2)}`.trim();
       }
     }
 
     const pngBuffer = await bwipjs.toBuffer({
-      bcid: 'ean13',
-      text: barcodeText + (addon ? `-${addon}` : ''),
+      bcid: 'isbn',
+      text: barcodeText,
+      ...(addonCode ? { addontext: formattedPrice || addonCode } : {}),
       scale: 4,
-      height: 30,
+      height: 18, // Reduced height for a more rectangular, professional look
       includetext: true,
-      textxalign: 'center',
       paddingwidth: 10,
       paddingheight: 10,
       backgroundcolor: 'ffffff'
