@@ -273,6 +273,11 @@ app.post('/api/compile', requireAuth, async (req, res) => {
     content = content.replace(/\\usepackage\s*\[\s*\](?!\s*\{)/g, ''); // empty [] not followed by {
     content = content.replace(/bidi\s*=\s*basic/g, 'bidi=default'); // bidi=basic is LuaTeX-only; replace with bidi=default for Tectonic/XeTeX
 
+    // Auto-map font family names to bundled OpenType/TrueType font filenames for fontspec
+    content = content.replace(/\{\s*Latin Modern Roman\s*\}/gi, '{lmroman10-regular.otf}');
+    content = content.replace(/\{\s*Noto Serif\s*\}/gi, '{NotoSerif-Regular.ttf}');
+    content = content.replace(/\{\s*Noto Sans\s*\}/gi, '{NotoSans-Regular.ttf}');
+
     const regex = /\\includegraphics(?:\[.*?\])?\{([^}]+)\}/g;
     const downloadedImages = new Map();
     let imageCounter = 0;
