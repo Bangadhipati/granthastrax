@@ -271,6 +271,7 @@ app.post('/api/compile', requireAuth, async (req, res) => {
     // Auto-fix common syntax errors from frontend editors
     content = content.replace(/\\usepackage\s*(?:\[[^\]]*\])?\s*\{\s*\}/g, ''); // empty {}
     content = content.replace(/\\usepackage\s*\[\s*\](?!\s*\{)/g, ''); // empty [] not followed by {
+    content = content.replace(/bidi\s*=\s*basic/g, 'bidi=default'); // bidi=basic is LuaTeX-only; replace with bidi=default for Tectonic/XeTeX
 
     const regex = /\\includegraphics(?:\[.*?\])?\{([^}]+)\}/g;
     const downloadedImages = new Map();
