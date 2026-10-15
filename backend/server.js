@@ -438,7 +438,11 @@ app.post('/api/compile', requireAuth, async (req, res) => {
         }
       }
 
-      return res.status(400).json({ error: 'Compilation failed', details: cleanError });
+      return res.status(400).json({ 
+        error: 'Compilation failed', 
+        details: cleanError,
+        rawLog: logOutput 
+      });
     }
 
     const pdfPath = path.join(tmpDir, 'document.pdf');
@@ -455,7 +459,11 @@ app.post('/api/compile', requireAuth, async (req, res) => {
 
   } catch (error) {
     console.error('Local Compilation error:', error);
-    res.status(500).json({ error: 'Failed to compile LaTeX locally', details: error.message });
+    res.status(500).json({ 
+      error: 'Failed to compile LaTeX locally', 
+      details: error.message,
+      rawLog: error.stack || error.message
+    });
   } finally {
     if (tmpDir && fs.existsSync(tmpDir)) {
       try {

@@ -48,3 +48,18 @@ export async function getProjectPdf(projectId: string): Promise<Blob | null> {
     return null;
   }
 }
+
+export async function removeProjectPdf(projectId: string): Promise<void> {
+  try {
+    const db = await openPdfDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      store.delete(projectId);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn("Failed to remove cached PDF from IndexedDB:", err);
+  }
+}

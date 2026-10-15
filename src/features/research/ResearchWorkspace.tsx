@@ -2,11 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { EditorShell } from "@/components/layout/EditorShell";
 import { ResearchSidebar } from "./ResearchSidebar";
-import { PdfViewer } from "./PdfViewer";
+import { PdfViewer, type CompilationErrorInfo } from "./PdfViewer";
 import { ShareModal } from "./ShareModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
-import { getProjectPdf, saveProjectPdf } from "@/lib/pdfCache";
+import { getProjectPdf, saveProjectPdf, removeProjectPdf } from "@/lib/pdfCache";
 import { 
   Loader2, Play, ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
   ArrowLeft, Download
@@ -80,6 +80,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
   }, [latexContent, project?.content, isInitialized, saveMutation.mutate]);
 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [compilationError, setCompilationError] = useState<CompilationErrorInfo | null>(null);
   const [isCompiling, setIsCompiling] = useState(false);
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
@@ -113,9 +114,19 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
     return () => document.removeEventListener("wheel", handleWheel);
   }, []);
 
+  const clearPreviewPdf = async () => {
+    setPdfUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setNumPages(0);
+    setPageNumber(1);
+    await removeProjectPdf(projectId);
+  };
+
   const handleCompile = async () => {
     setIsCompiling(true);
-    // Keep existing pdfUrl intact so the user can continue viewing the preview while building
+    setCompilationError(null);
     try {
       const res = await api.post("/api/compile", { 
         content: latexContent,
@@ -126,54 +137,77 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
       if (res.status === 200) {
         const blob = res.data;
         if (blob.type && !blob.type.includes('pdf')) {
+          await clearPreviewPdf();
           const text = await blob.text();
-          console.error("Compilation Error Log:", text);
-          alert("Compilation failed! Check the console for the full LaTeX error log.\n\n" + text.substring(0, 500) + "...");
+          let errData: any = {};
+          try {
+            errData = JSON.parse(text);
+          } catch {
+            errData = { details: text };
+          }
+          setCompilationError({
+            message: errData.error || "Compilation failed",
+            details: errData.details || text,
+            rawLog: errData.rawLog || text
+          });
           return;
         }
 
         // Persist the compiled PDF so it stays cached across refreshes
         await saveProjectPdf(projectId, blob);
 
+        setCompilationError(null);
         const url = URL.createObjectURL(blob);
         setPdfUrl(prev => {
           if (prev) URL.revokeObjectURL(prev);
           return url;
         });
       } else {
+        await clearPreviewPdf();
         const text = await blob.text();
-        
-        let errorMsg = "Compilation failed. Please check your LaTeX syntax.";
-        
-        // Intelligent error parsing
-        if (text.includes("bidi-only-lua") || text.includes("bidi=basic")) {
-          errorMsg = "Your code uses 'bidi=basic', which is a LuaTeX-only configuration. Please change 'bidi=basic' to 'bidi=default' in your preamble.";
-        } else {
-          // Extract the first actual LaTeX error line if possible
-          const match = text.match(/! (.*?)\n/);
-          if (match) {
-            errorMsg = `LaTeX Error: ${match[1]}\n\nPlease fix the error in your code and try again.`;
-          }
+        let errData: any = {};
+        try {
+          errData = JSON.parse(text);
+        } catch {
+          errData = { details: text };
         }
-        
-        alert(errorMsg + "\n\n(Check the console for the full LaTeX error log)");
-        console.error("LaTeX Compilation Log:\n", text);
+        setCompilationError({
+          message: errData.error || "Compilation failed",
+          details: errData.details || text,
+          rawLog: errData.rawLog || text
+        });
       }
     } catch (error: any) {
-      console.error(error);
+      console.error("Compilation error caught:", error);
+      await clearPreviewPdf();
       
       // Axios error handling when responseType is 'blob'
       if (error.response && error.response.data && error.response.data instanceof Blob) {
-        error.response.data.text().then(text => {
+        try {
+          const text = await error.response.data.text();
+          let errData: any = {};
           try {
-            const errData = JSON.parse(text);
-            alert(errData.details || errData.error || "Failed to compile LaTeX document.");
-          } catch (e) {
-            alert("Failed to compile LaTeX document.");
+            errData = JSON.parse(text);
+          } catch {
+            errData = { details: text };
           }
-        });
+          setCompilationError({
+            message: errData.error || "Compilation failed",
+            details: errData.details || text.substring(0, 500),
+            rawLog: errData.rawLog || text
+          });
+        } catch {
+          setCompilationError({
+            message: "Compilation failed",
+            details: "An error occurred while building the LaTeX document."
+          });
+        }
       } else {
-        alert(error.response?.data?.details || error.response?.data?.error || error.message || "Failed to reach compiler API.");
+        setCompilationError({
+          message: error.response?.data?.error || error.message || "Failed to reach compiler API",
+          details: error.response?.data?.details || "Please check that the server is reachable and try again.",
+          rawLog: error.stack || String(error)
+        });
       }
     } finally {
       setIsCompiling(false);
@@ -387,6 +421,8 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
                   numPages={numPages}
                   previewZoom={previewZoom}
                   onLoadSuccess={onDocumentLoadSuccess}
+                  compilationError={compilationError}
+                  onRetryCompile={handleCompile}
                 />
               </div>
             </ResizablePanel>

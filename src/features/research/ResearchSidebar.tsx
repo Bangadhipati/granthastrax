@@ -235,18 +235,41 @@ export function ResearchSidebar({
                       </div>
                     ) : (
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 overflow-hidden cursor-pointer flex-1" onClick={() => onInsertImage(img.url, img.name)}>
-                          <img src={img.url} alt={img.name} className="size-5 rounded object-cover" />
-                          <span className="truncate text-muted-foreground hover:text-foreground">{img.name}</span>
+                        <div className="flex items-center gap-2 overflow-hidden flex-1">
+                          <a 
+                            href={img.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="size-5 rounded overflow-hidden shrink-0 border border-border hover:border-gold transition-colors inline-flex items-center justify-center cursor-pointer"
+                            title="View full image in new tab"
+                          >
+                            <img src={img.url} alt={img.name} className="size-full object-cover" />
+                          </a>
+                          <span className="truncate text-muted-foreground select-text" title={img.name}>{img.name}</span>
                         </div>
                         <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => onInsertImage(img.url, img.name)} className="p-1 text-muted-foreground hover:text-gold" title="Insert at cursor">
+                          <button 
+                            type="button"
+                            onClick={() => onInsertImage(img.url, img.name)} 
+                            className="p-1 text-muted-foreground hover:text-gold" 
+                            title="Insert \includegraphics code at cursor"
+                          >
                             <Plus className="size-3" />
                           </button>
-                          <button onClick={() => startEditing(img)} className="p-1 text-muted-foreground hover:text-foreground" title="Rename">
+                          <button 
+                            type="button"
+                            onClick={() => startEditing(img)} 
+                            className="p-1 text-muted-foreground hover:text-foreground" 
+                            title="Rename"
+                          >
                             <Edit2 className="size-3" />
                           </button>
-                          <button onClick={() => deleteImageMutation.mutate(img._id)} className="p-1 text-muted-foreground hover:text-red-500" title="Delete">
+                          <button 
+                            type="button"
+                            onClick={() => deleteImageMutation.mutate(img._id)} 
+                            className="p-1 text-muted-foreground hover:text-red-500" 
+                            title="Delete"
+                          >
                             <X className="size-3" />
                           </button>
                         </div>
