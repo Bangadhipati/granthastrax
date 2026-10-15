@@ -269,17 +269,17 @@ export function ResearchSidebar({
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <label className="text-sm font-medium leading-none">Compiler Engine</label>
-                <Select value={compiler} onValueChange={handleCompilerChange}>
+                <Select value="tectonic" onValueChange={handleCompilerChange}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a compiler" />
+                    <SelectValue placeholder="Tectonic (Unified Modern LaTeX)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="tectonic">Tectonic (Recommended / Cloud)</SelectItem>
-                    <SelectItem value="pdflatex">pdfLaTeX</SelectItem>
-                    <SelectItem value="xelatex">XeLaTeX</SelectItem>
-                    <SelectItem value="lualatex">LuaLaTeX</SelectItem>
+                    <SelectItem value="tectonic">Tectonic (Unified Modern LaTeX)</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  GranthAstraX uses Tectonic — a unified compiler supporting standard LaTeX, XeTeX fonts, and automated package management.
+                </p>
               </div>
             </div>
           </DialogContent>

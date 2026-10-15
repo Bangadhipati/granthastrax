@@ -123,10 +123,8 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
         let errorMsg = "Compilation failed. Please check your LaTeX syntax.";
         
         // Intelligent error parsing
-        if (text.includes("fontspec") || text.includes("TU/")) {
-          errorMsg = "Your code uses 'fontspec' or a custom font, which requires XeLaTeX or LuaLaTeX. Please click the Project Settings icon in the sidebar and change your compiler to LuaLaTeX.";
-        } else if (text.includes("bidi-only-lua") || text.includes("bidi=basic")) {
-          errorMsg = "Your code uses a babel/bidi configuration that requires LuaLaTeX. Please click Project Settings and change your compiler to LuaLaTeX.";
+        if (text.includes("bidi-only-lua") || text.includes("bidi=basic")) {
+          errorMsg = "Your code uses 'bidi=basic', which is a LuaTeX-only configuration. Please change 'bidi=basic' to 'bidi=default' in your preamble.";
         } else {
           // Extract the first actual LaTeX error line if possible
           const match = text.match(/! (.*?)\n/);
