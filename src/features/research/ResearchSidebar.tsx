@@ -30,6 +30,7 @@ export function ResearchSidebar({
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [editingImageId, setEditingImageId] = useState<string | null>(null);
   const [editImageName, setEditImageName] = useState("");
 
@@ -51,7 +52,7 @@ export function ResearchSidebar({
   };
 
   const addImageMutation = useMutation({
-    mutationFn: async (payload: { name: string, url: string, publicId: string }) => {
+    mutationFn: async (payload: { name: string, url: string, publicId: string } | Array<{ name: string, url: string, publicId: string }>) => {
       const res = await api.post(`/api/projects/${projectId}/images`, payload);
       return res.data;
     },
@@ -82,8 +83,9 @@ export function ResearchSidebar({
   });
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+    const files = Array.from(fileList);
 
     const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
     const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
@@ -94,33 +96,50 @@ export function ResearchSidebar({
     }
 
     setIsUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', uploadPreset);
+    setUploadProgress({ current: 0, total: files.length });
 
-    try {
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-        method: 'POST',
-        body: formData
-      });
-      const data = await res.json();
-      
-      if (data.secure_url) {
-        addImageMutation.mutate({
-          name: file.name,
-          url: data.secure_url,
-          publicId: data.public_id
-        });
-      } else {
-        alert("Upload failed: " + (data.error?.message || "Unknown error"));
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Upload failed to connect to Cloudinary.");
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+    const uploadedAssets: Array<{ name: string; url: string; publicId: string }> = [];
+    let completedCount = 0;
+
+    await Promise.allSettled(
+      files.map(async (file) => {
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('upload_preset', uploadPreset);
+
+          const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+            method: 'POST',
+            body: formData
+          });
+          const data = await res.json();
+          if (data.secure_url) {
+            uploadedAssets.push({
+              name: file.name,
+              url: data.secure_url,
+              publicId: data.public_id || ''
+            });
+          } else {
+            console.error(`Upload error for ${file.name}:`, data.error?.message);
+          }
+        } catch (err) {
+          console.error(`Network error uploading ${file.name}:`, err);
+        } finally {
+          completedCount++;
+          setUploadProgress({ current: completedCount, total: files.length });
+        }
+      })
+    );
+
+    if (uploadedAssets.length > 0) {
+      addImageMutation.mutate(uploadedAssets);
+    } else {
+      alert("Upload failed. Please check your network connection and Cloudinary settings.");
     }
+
+    setIsUploading(false);
+    setUploadProgress(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const startEditing = (img: ProjectImage) => {
@@ -169,6 +188,7 @@ export function ResearchSidebar({
                 ref={fileInputRef} 
                 onChange={handleFileUpload} 
                 accept="image/*" 
+                multiple
                 className="hidden" 
               />
               <button
@@ -177,8 +197,21 @@ export function ResearchSidebar({
                 disabled={isUploading}
                 className="mb-3 flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border py-2.5 text-xs text-muted-foreground transition-colors hover:border-gold/40 hover:text-gold disabled:opacity-50"
               >
-                {isUploading ? <Loader2 className="size-4 animate-spin" /> : <UploadCloud className="size-4" />}
-                <span>Upload Image</span>
+                {isUploading ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin text-gold" />
+                    <span>
+                      {uploadProgress 
+                        ? `Uploading (${uploadProgress.current}/${uploadProgress.total})...` 
+                        : "Uploading..."}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="size-4" />
+                    <span>Upload Images</span>
+                  </>
+                )}
               </button>
 
               <ul className="space-y-2">

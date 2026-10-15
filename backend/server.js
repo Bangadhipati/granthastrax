@@ -205,12 +205,9 @@ app.delete('/api/projects/:id', requireAuth, async (req, res) => {
 
 // --- Image Management Routes ---
 
-// Add a new image to project
+// Add image(s) to project (single or batch multiple)
 app.post('/api/projects/:id/images', requireAuth, async (req, res) => {
   try {
-    const { name, url, publicId } = req.body;
-    if (!name || !url) return res.status(400).json({ error: 'Name and URL required' });
-
     const project = await Project.findOne({ 
       _id: req.params.id,
       $or: [{ userId: req.userId }, { collaboratorIdentifiers: { $in: req.userIdentifiers } }]
@@ -218,12 +215,31 @@ app.post('/api/projects/:id/images', requireAuth, async (req, res) => {
 
     if (!project) return res.status(404).json({ error: 'Project not found' });
 
-    project.images.push({ name, url, publicId });
+    const newImages = Array.isArray(req.body)
+      ? req.body
+      : (req.body.images && Array.isArray(req.body.images))
+        ? req.body.images
+        : [req.body];
+
+    const validImages = newImages.filter(img => img && img.name && img.url);
+    if (validImages.length === 0) {
+      return res.status(400).json({ error: 'Valid image name and URL required' });
+    }
+
+    for (const img of validImages) {
+      project.images.push({
+        name: img.name,
+        url: img.url,
+        publicId: img.publicId || ''
+      });
+    }
+
     project.lastEditedBy = req.userName;
     await project.save();
     res.json(project);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to add image' });
+    console.error('Failed to add image(s):', error);
+    res.status(500).json({ error: 'Failed to add image(s)' });
   }
 });
 
