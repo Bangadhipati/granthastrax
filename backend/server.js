@@ -4,7 +4,27 @@ const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const sharp = require('sharp');
 require('dotenv').config();
+
+// Helper to create a crisp placeholder PNG image if an included image is missing
+async function createPlaceholderImage(label) {
+  const cleanLabel = (label || 'image.png').replace(/[<>&"']/g, '').substring(0, 45);
+  const svg = `
+  <svg width="600" height="400" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100%" height="100%" fill="#f8fafc" stroke="#94a3b8" stroke-width="4" stroke-dasharray="8,8" rx="8" />
+    <g transform="translate(268, 115)">
+      <rect x="0" y="0" width="64" height="48" rx="6" fill="#e2e8f0" stroke="#64748b" stroke-width="3"/>
+      <circle cx="20" cy="16" r="6" fill="#64748b"/>
+      <path d="M6 40 L26 22 L40 34 L48 26 L58 40 Z" fill="#94a3b8"/>
+    </g>
+    <text x="300" y="205" font-family="sans-serif" font-size="20" font-weight="bold" fill="#334155" text-anchor="middle">Image Placeholder</text>
+    <text x="300" y="235" font-family="monospace" font-size="14" fill="#64748b" text-anchor="middle">${cleanLabel}</text>
+    <text x="300" y="260" font-family="sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">(Upload in Project Assets to replace)</text>
+  </svg>
+  `;
+  return await sharp(Buffer.from(svg)).png().toBuffer();
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -292,10 +312,12 @@ app.post('/api/compile', requireAuth, async (req, res) => {
       return str.replace(regex, () => data.shift());
     };
 
-    content = await replaceAsync(content, regex, async (match, url) => {
+    content = await replaceAsync(content, regex, async (match, rawUrl) => {
+      const url = rawUrl.trim();
       const projectImg = images.find(img => img.name === url);
       let downloadUrl = projectImg ? projectImg.url : url;
       
+      // 1. If it's a remote URL from project assets or direct link
       if (downloadUrl.startsWith('http://') || downloadUrl.startsWith('https://')) {
         try {
           if (!downloadedImages.has(downloadUrl)) {
@@ -310,13 +332,28 @@ app.post('/api/compile', requireAuth, async (req, res) => {
             downloadedImages.set(downloadUrl, { filename });
           }
           const localFile = downloadedImages.get(downloadUrl).filename;
-          return match.replace(url, localFile);
+          return match.replace(rawUrl, localFile);
         } catch (e) {
-          console.error("Failed to download image:", downloadUrl);
-          return match;
+          console.warn("Failed to download image, generating placeholder instead:", downloadUrl);
         }
       }
-      return match;
+
+      // 2. If image is not uploaded or missing from code path, auto-create a crisp placeholder
+      try {
+        const hasExt = /\.(png|jpe?g|pdf|webp)$/i.test(url);
+        const relativeTarget = hasExt ? url : `${url}.png`;
+        const fullDest = path.join(tmpDir, relativeTarget);
+
+        if (!fs.existsSync(fullDest)) {
+          fs.mkdirSync(path.dirname(fullDest), { recursive: true });
+          const placeholderBuffer = await createPlaceholderImage(url);
+          fs.writeFileSync(fullDest, placeholderBuffer);
+        }
+        return match;
+      } catch (err) {
+        console.error("Failed to generate image placeholder:", err);
+        return match;
+      }
     });
 
     const texPath = path.join(tmpDir, 'document.tex');
