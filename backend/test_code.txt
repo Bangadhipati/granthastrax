@@ -1,0 +1,538 @@
+`\\documentclass[10pt, twocolumn, a4paper]{article}
+
+% --- UNIVERSAL PREAMBLE BLOCK ---
+\\usepackage[utf8]{inputenc}
+\\usepackage[T1]{fontenc}
+\\usepackage{lmodern} % Standard robust font
+\\usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=1.5cm, right=1.5cm, columnsep=0.7cm]{geometry}
+
+% --- PACKAGES FOR Q1 ACADEMIC FORMATTING ---
+\\usepackage{booktabs}
+\\usepackage{amsmath}
+\\usepackage{amssymb}
+\\usepackage{url}
+\\usepackage{microtype}
+\\usepackage{titlesec}
+\\usepackage{enumitem}
+\\usepackage{xcolor} 
+\\usepackage{cite}
+\\usepackage{tabularx} 
+\\usepackage{graphicx}
+
+% Define academic colors
+\\definecolor{primaryblue}{RGB}{20, 70, 120}
+
+\\usepackage[colorlinks=true, linkcolor=primaryblue, citecolor=primaryblue, urlcolor=primaryblue]{hyperref}
+
+% Adjusting section title formats
+\\titleformat{\\section}{\\large\\bfseries\\scshape\\color{primaryblue}}{\\thesection.}{0.5em}{}
+\\titleformat{\\subsection}{\\normalsize\\bfseries\\color{primaryblue}}{\\thesubsection.}{0.5em}{}
+\\titleformat{\\subsubsection}{\\normalsize\\itshape\\color{primaryblue}}{\\thesubsubsection.}{0.5em}{}
+
+% Customizing lists
+\\setlist[itemize]{label=-, leftmargin=*}
+\\setlist[enumerate]{leftmargin=*}
+
+\\title{\\vspace{-1.5cm}\\LARGE \\textbf{\\color{primaryblue} Mitigating Hallucinations in Clinical Text Summarization: A Comparative Benchmarking of Legacy Seq2Seq Architectures and Quantized SOTA Large Language Models}}
+
+\\author{
+    \\normalsize \\textbf{Debarghya Bhowmick} \\\\
+    \\small Chief of Research and Development \\\\
+    \\small AstraGenX, Kolkata, India \\\\
+    \\small \\url{debarghya.bhowmick@yahoo.com}
+    \\and
+    \\normalsize \\textbf{Dr. Tohida Rehman} \\\\
+    \\small Assistant Professor \\\\
+    \\small Jadavpur University, Kolkata, India \\\\
+    \\small \\url{tohidarehman.it@jadavpuruniversity.in}
+}
+\\date{}
+
+\\begin{document}
+
+\\maketitle
+
+\\begin{abstract}
+\\noindent
+\\textbf{\\textit{Abstract}---With the explosion of all medical records and research papers in the digital world, no doctor can read it all. To address this, hospitals are seeking solutions from Artificial Intelligence (AI) to automatically summarize lengthy medical documents. In hospitals, though, the use of such a modern LLM as ChatGPT or Llama is risky. While writing beautifully fluent sentences, these models suffer from "hallucinations": they are sure of all the medical facts they are coming up with, including wrong dosages of drugs or fake symptoms. In medicine, a beautiful lie is a worse lie than an ugly truth. This paper makes a thorough and detailed comparison between older, mathematically rigorous AI architectures, like Sequence-to-Sequence models such as Pegasus, and the latest, most intelligent LLMs, like Llama-3, Qwen, and BioMistral. We tried six models to see how well they would write, how safe they were and how they would run on standard hospital computers with a memory compression technique called 4-bit quantization. We found a huge trade-off between the quality of writing produced by a modern LLM like BioMistral and its safety, with an astonishing 38\\% of the produced facts being completely made up (on the ROUGE-L quality metric). The older Pegasus model, on the other hand, generates more robotic text, but it is extremely safe with just 4.35\\% hallucination. This paper examines the math that leads to the failure of these models, real-life examples of AI errors, and guidelines for when hospitals should stick with the old AI models and when they can try the newer, smarter ones.}
+
+\\vspace{0.5em}
+\\noindent\\textbf{\\textit{Keywords}---Natural Language Processing, Clinical Summarization, Large Language Models, AI Hallucination, Quantization, Seq2Seq, Electronic Health Records.}
+\\end{abstract}
+
+\\section{Introduction}
+
+There is a lot of text in healthcare right now. The shift from paper charts to Electronic Health Records (EHRs) is what has left behind a significant digital trail for each individual patient over the last 20 years.In the last 20 years, the world has moved from paper chart systems to Electronic Health Records (EHRs) and the result is a huge digital footprint for each patient. In addition, the rate of medical knowledge is accelerating at a terrifying rate. There are more than 40 million medical research papers stored in the PubMed database, with thousands being published every day, as of 2026 \\cite{pubmed_stats}. 
+
+Human doctors, nurses, and medical researchers can't read fast enough. A doctor about to perform a complicated surgery could have to read a patient's full 10-year medical record, as well as three new research papers on the particular surgical method. In light of this daunting mental burden, the healthcare sector is in dire need of assistance from Artificial Intelligence (AI) to sum up all of these mountains of information into short, accurate bullet points. This work is known as automated text summarisation.
+
+But you can't just summarize a medical report, a sporting event or a fictional story. In real life, if an AI bot incorrectly summarized the plot of a movie, no one would be hurt. But in a hospital things are different. An AI should be 100\\% accurate. An AI that reads a patient's extensive medical records and inadvertently summarizes "Aspirin" when the patient actually has diabetes, or the other way around, might make a deadly mistake \\cite{ji2023hallucination}. 
+
+Until now, the common AI models employed to carry out this task were known as “Sequence-to-Sequence” (Seq2Seq). Some of the renowned ones are BART, T5 or PEGASUS \\cite{zhang2020pegasus, rehman2022analysis}. The models ran very safely. They were as much like a smart digital highlighter pen. They would read the text, identify the most important sentences and then copy and paste the important sentences mostly to a new paragraph. They were very safe, did little to no faking of information, as they were simply copying the text. 
+
+The entire tech world has come to the end of these safe highlighters and into the realm of giant conversational Artificial Intelligence (AI), called Large Language Models (LLMs). These include world-famous models like Meta's Llama, Google's Gemma, and Alibaba's Qwen \\cite{grattafiori2024llama3}. The new models are very intelligent. Not only do they copy and paste, but they read the text, understand it, and write a summary and report in their own beautiful, human-like words. 
+
+However, this genius intelligence has a huge fatal defect. The modern LLMs are essentially designed to guess the next word in the conversation. They are greatly influenced by anything they read on the web. This leads them to "hallucinate" - that is, assert with certainty that information that was absent from the original document \\cite{rehman2023hallucination}. 
+
+This research paper directly tackles this problem. Now, we would like to address a key question that hospital IT directors may be asking themselves: \\textit{But are modern LLMs too risky to handle medical data, even with their prowess at writing?}
+
+\\subsection{Main Contributions of this Paper}
+To answer this question, this paper expands heavily on previous research by offering the following detailed contributions:
+\\begin{enumerate}
+    \\item \\textbf{A Comprehensive AI Test:} We benchmarked six different AI models, comparing older, safer highlighter models against the newest conversational AIs, testing them strictly on medical data.
+    \\item \\textbf{Mathematical Safety Measurement:} We did not just look at the summaries; we used a strict mathematical formula (Novel Entity Rate) to count exactly how many fake medical words each AI invented.
+    \\item \\textbf{Deep Theoretical Explanation:} We break down the complex math (Attention mechanisms) to explain exactly \\textit{why} the old AIs tell the truth and the new AIs lie.
+    \\item \\textbf{Hospital Hardware and Economic Testing:} We tested how fast these AIs run on cheap, standard hospital computers using a memory compression trick called 4-bit quantization, and discuss the real-world electricity and server costs.
+    \\item \\textbf{Real-World Case Studies:} We provide actual examples of the summaries these AIs generated to visually show what a dangerous hallucination looks like in practice.
+\\end{enumerate}
+
+\\section{Background and the Evolution of AI}
+
+In order to gain a proper understanding of the reasons behind the hallucination of modern AIs, it is necessary to briefly explore the evolution of AIs over the past decade, namely in the space of Natural Language Processing (NLP).
+
+\\subsection{The Early Days: RNNs and LSTMs}
+Prior to 2017, the most effective approach to inputting text into a computer would have been by employing Recurrent Neural Networks (RNNs) and Long Short-Term Memory (LSTM) networks. These models read words as humans do, word-by-word, left to right. 
+
+This may seem obvious, but this was a bad idea for long medical reports. In one experiment, an LSTM "forgot" what the first sentence of a 500-word paragraph was after finishing the paragraph.One experiment found that after completing a 500-word paragraph, an LSTM "forgot" what the first sentence had been about. They did not have good memories. So they were of little use when they had to summarize lengthy research papers.
+
+\\subsection{The Revolution: The Transformer}
+Google published a well-known paper in 2017 titled "Attention is All You Need" that introduced the \\textbf{Transformer} architecture \\cite{vaswani2017attention}. The World was changed by the Transformer. 
+
+The Transformer does not read a word at a time from left to right, but rather reads the \\textit{whole document at once}. It is based on a mathematical principle known as "Attention. When you type one word, such as "allergy," the math translates the word into a mathematical equation, and creates invisible mathematical lines to every other word in the document that is related, such as "Peanuts" or "Penicillin," regardless of its content or location. This enabled AI to finally comprehend lengthy, intricate paragraphs in medical literature without losing the initial context.
+
+\\subsection{The Era of the "Highlighter" (Seq2Seq)}
+The first wave of successful Transformer AIs used a "Sequence-to-Sequence" (Seq2Seq) design. Their brains were split into two separate halves: an Encoder and a Decoder.
+*   \\textbf{The Encoder:} This half reads the medical document and creates a massive mathematical map of all the facts.
+*   \\textbf{The Decoder:} This half looks at the map and writes the summary.
+
+Google's PEGASUS \\cite{zhang2020pegasus} model is the most popular one. PEGASUS was trained only on millions of medical abstracts, resulting in a new version, dubbed Pegasus-PubMed. 
+The Decoder is mathematically “locked” to the map of the Encoder, so it is not easy to create novel things. It functions as an extremely sophisticated digital highlighter to extract facts and then compress them securely \\cite{rehman2021automatic}. 
+
+\\subsection{The Rise of Conversational LLMs (Decoder-Only)}
+Over the past several years, AI companies came to the realization that having two halves of a brain that could be trained separately was not efficient. They discarded the Encoder, and it was no longer used. Modern AIs, such as ChatGPT, Meta's Llama-3 and Google's Gemma are ‘Decoder-Only' AIs. 
+
+They don't make a map of the texts. They just see a cue (Summarize this:) and begin to guess the next most logical word. They're phenomenal talkers, since they've read the whole internet. However, the peculiarity of this design is the very same reason for medical hallucination, which will be discussed in the math section of this document \\cite{zhao2023survey}.
+
+\\section{The Math Behind Hallucinations}
+
+Why do older models be the truth, while newer models be lies? This can be understood based on the formula of mathematics used to pay attention to words.
+
+\\subsection{Cross-Attention (The Safe Math)}
+In older Seq2Seq models such as Pegasus, the formula used by the AI is known as \\textit{Cross-Attention}. 
+
+Visualize that the AI is composing the summary, word by word. The Cross-Attention formula causes the AI to continually re-reference the original text as it attempts to figure out what word to write next. 
+To make it simple, the AI is mathematically tied to the source text. A broken leg means the words "broken" and "leg" will glow bright in the AI's memory to make sure that the "broken leg" is written down. It doesn't get easily side-tracked.
+
+\\subsection{Causal Self-Attention (The Dangerous Math)}
+Modern LLMs use a different formula called \\textit{Causal Self-Attention}. 
+
+Here's a mathematical rule you've got that's known as a "causal mask" (or lower-triangular mask). This mask is similar to blinders on a horse. In the first time the LLM is writing a summary, it is allowed to refer to a prompt. The longer the summary becomes, however, the more the AI devotes its focus to the words \\textit{it just wrote itself}, instead of the source itself.
+
+This effect is known as "Exposure Bias" and is a dangerous thing. 
+Consider the following example: The original document reads: The patient took Aspirin.
+\\begin{itemize}
+\\item The modern LLM reads this and starts writing.
+
+\\item Because it has read the entire internet, it knows that Ibuprofen is very similar to Aspirin. 
+
+\\item By random chance, it accidentally outputs the word "Ibuprofen."
+
+\\item Now, the causal mask forces the AI to pay massive attention to its own word ("Ibuprofen").
+
+\\item It forgets the original document and starts hallucinating side-effects and dosages specifically for Ibuprofen. 
+\\end{itemize}
+
+This mathematical drift is the root cause of why LLMs invent fake medical facts \\cite{ji2023hallucination, rehman2023hallucination}.
+
+\\subsection{Types of Hallucinations}
+In the field of medical AI, these lies can be categorized into two types:
+
+\\textbf{Intrinsic Hallucinations:} When the AI does something that contradicts the paper. This is a critical mistake (e.g. The paper states that the Heart rate increased, and AI states that the Heart rate decreased).
+
+\\textbf{Extrinsic Hallucinations:} These are pieces of information that are either scientifically accurate in the world, but not in the paper. The paper specifies that the patient should take medication to treat the headache and the AI response is "The patient should also drink plenty of water. Advice on drinking water (not originally in document). If this is strictly data entry, it’s still a failure, as the AI is also introducing unverifiable filler.
+
+\\section{Methodology}
+
+To prove these theories, we set up a strict, computer-based benchmarking test. 
+
+\\subsection{The Chosen AI Models}
+We selected six models that represent different eras, sizes, and training methods.
+
+% TABLE 1: TAXONOMY
+\\begin{table}[htbp]
+\\centering
+\\caption{\\textsc{Taxonomy of Evaluated Models}}
+\\label{tab:taxonomy}
+\\footnotesize
+\\begin{tabularx}{\\columnwidth}{@{}X l l@{}}
+\\toprule
+\\textbf{Model} & \\textbf{Params} & \\textbf{Architecture} \\\\
+\\midrule
+Pegasus-PubMed & 568M & Legacy Seq2Seq \\\\
+Gemma-2-2B & 2B & Modern Causal \\\\
+Phi-3-Mini & 3.8B & Modern Causal \\\\
+BioMistral-7B & 7B & Medical Causal \\\\
+Qwen-2.5-7B & 7B & Modern Causal \\\\
+Llama-3.1-8B & 8B & Modern Causal \\\\
+\\bottomrule
+\\end{tabularx}
+\\end{table}
+
+\\begin{itemize}
+    \\item \\textbf{Pegasus-PubMed:} Our safe baseline. An older model built strictly for medical extraction.
+    \\item \\textbf{BioMistral-7B:} A massive modern model. What makes it special is that researchers took a standard AI and forced it to read millions of medical papers on PubMed so it learned how doctors speak \\cite{labrak2024biomistral}.
+    \\item \\textbf{Llama-3.1-8B:} Meta's flagship open-source AI, considered one of the smartest general models in the world.
+    \\item \\textbf{Qwen-2.5-7B:} Alibaba's highly advanced reasoning AI.
+    \\item \\textbf{Phi-3-Mini:} A highly compressed Microsoft model designed to run on small devices like cellphones.
+    \\item \\textbf{Gemma-2-2B:} Google's lightweight general model.
+\\end{itemize}
+
+\\subsection{Decoding Strategy: Stopping the AI from being "Creative"}
+ChatGPT has a setting called “Temperature” when you utilize it. At high temperatures the AI is very creative and random (useful for poetic writing). A cold temperature makes it stringent. 
+
+Since it is medicine, we had to use all models with \\textbf{Greedy Decoding} (Temperature = 0.0). In basic terms, we mathematically took the creativity out of AI. It faced the decision of using the most apparent word, the one that was mathematically sensible, at each and every stage. We had a curiosity about whether these contemporary LLMs would still hallucinate even when subjected to the most boring and strict conditions.
+
+\\subsection{The Hardware and 4-Bit Quantization}
+Large models such as Llama-3.1 typically demand large, high-cost supercomputers with vast video memory (VRAM). Few hospitals locally have supercomputers. Standard Servers, Standard Graphics Cards (usually about 16G of VRAM). 
+
+For this purpose, we tested these models in a real, under-funded clinic by using a genius mathematical trick, called \\textbf{4-bit Quantization (QLoRA)} \\cite{dettmers2023qlora}. 
+
+An AI typically encodes everything that it knows in the form of very precise numbers (in this case, 3.14159265) that are very large. These numbers are rounded off brutally to make these files much smaller (e.g. 3.1). 
+It's similar to shrinking a 4K movie to MP4 size to fit on a standard USB drive. 
+This compression enabled us to use an affordable 16GB 'GPU' to run the huge 8-Billion parameter models. But it will be interesting to see whether this compression has a negative effect on the AI's brain and causes it to hallucinate more.
+
+\\subsection{How We Graded the AI (The Metrics)}
+We didn't rate the AI based on our personal reading of them – we relied on strict computer algorithms to eliminate human bias.
+
+\\subsubsection{ROUGE-L (Writing Quality)}
+ROUGE is the industry standard for measuring summarization \\cite{lin2004rouge}. We employed ROUGE-L which is a measure of LCS (Longest Common Subsequence). 
+Simply, a human doctor composes a flawless summary. The computer then looks at the AI's summary. The more it uses the same words in the same grammatical structure as the human doctor, the higher the score will be. High ROUGE-L indicates that the AI produces nice, well-structured sentences!
+
+\\subsubsection{Novel Entity Rate (Hallucination Risk)}
+We have an algorithm to determine whether a word is fake or not to gauge danger. 
+One of the first steps the computer takes is to eliminate all of the common words (the and and is). 
+It then examines each of the complex medical terms that the AI has generated in its summary. If the AI writes a medical drug, or a symptom, that it does not actually exist anywhere in the original document, it is marked as a "Novel Entity" (a hallucination). A high score here indicates that the AI is generating false data and it will be extremely dangerous.
+
+\\section{Results: The Great Trade-off}
+
+From our extensive benchmarking, it's a hard truth: At this time, you can't have an AI that produces nice paragraphs and is 100\\% proofed at the same time. It's a huge catch.
+
+% TABLE 2: QUALITY AND SAFETY
+\\begin{table}[htbp]
+\\centering
+\\caption{\\textsc{Quality and Factual Adherence Scores}}
+\\label{tab:quality_safety}
+\\footnotesize
+\\begin{tabularx}{\\columnwidth}{@{}X l c c@{}}
+\\toprule
+\\textbf{Model} & \\textbf{Paradigm} & \\textbf{Quality} & \\textbf{Hallucination} \\\\
+\\midrule
+Pegasus-PubMed & Seq2Seq & 23.66 & \\textbf{4.35\\%} \\\\
+BioMistral-7B & Causal & \\textbf{40.48} & 38.46\\% \\\\
+Phi-3-Mini & Causal & 5.88 & 86.21\\% \\\\
+Gemma-2-2B & Causal & 22.22 & 39.19\\% \\\\
+Qwen-2.5-7B & Causal & 16.67 & 64.13\\% \\\\
+Llama-3.1-8B & Causal & 27.78 & 52.31\\% \\\\
+\\bottomrule
+\\end{tabularx}
+\\end{table}
+
+\\subsection{Writing Quality: Domain Training Wins}
+The medically trained model \\textbf{BioMistral-7B} utterly demolished the competition if the only thing that is important for a hospital is the pretty and readable summary.
+
+\\begin{figure}[htbp]
+  \\centering
+  \\includegraphics[width=\\columnwidth]{fig_rouge_quality.png}
+  \\caption{Overall Quality (ROUGE-L) across evaluated architectures. Higher scores indicate better structural and syntactic overlap with expert clinical summaries.}
+  \\label{fig:rouge_plot}
+\\end{figure}
+
+It received a huge score of 40.48 on the quality scale (see Table \\ref{tab:quality_safety}). The researchers asked it to read millions of medical papers, and so it knows exactly how doctors keep their notes. Can transform a chaotic, hard to read paragraph of lab results into three clearly formulated, beautiful bullet points. 
+
+The older Pegasus version produced safe summaries that lacked a bit of human style, were robotic, and repetitive, achieving a score of 23.66. The world-famous Llama-3.1 managed a respectable 27.78, but that is just because the AI is “smart” in general, this does not imply that it is capable of writing like a doctor.
+
+\\subsection{The Danger of Hallucinations: Safety Fails}
+The problem with the modern models is however, when they take a look at the Hallucination Risk they find out that there is an alarming issue. 
+
+\\begin{figure}[htbp]
+  \\centering
+  \\includegraphics[width=\\columnwidth]{fig_hallucination_risk.png}
+  \\caption{Factual Hallucination Risk. Lower percentages denote safer, strictly extractive behavior crucial for clinical environments.}
+  \\label{fig:hallucination_plot}
+\\end{figure}
+
+The old, clunky \\textbf{Pegasus-PubMed} model was incredibly safe. It only hallucinated 4.35\\% of the time, meaning it almost never invented fake medical facts. It acted exactly like the safe digital highlighter we wanted.
+
+In contrast, the modern conversational LLMs failed this safety test completely. \\textbf{Llama-3.1} hallucinated new facts 52\\% of the time. Even the medically trained \\textbf{BioMistral} hallucinated 38\\% of the time. 
+
+Even worse, the highly compressed \\textbf{Phi-3-Mini} suffered a catastrophic mathematical failure. It scored a terrible 5.88 for quality and an 86.21\\% hallucination rate. When we looked at what it wrote, it completely ignored the medical document and just started hallucinating random conversational filler, like "Thank you for providing this text, I will summarize it now."
+
+\\subsection{Hardware Bottlenecks: Speed and Cost}
+Finally, we looked at how fast the models ran. Speed translates directly to electricity and cloud computing costs for a hospital.
+
+% TABLE 3: HARDWARE
+\\begin{table}[htbp]
+\\centering
+\\caption{\\textsc{Hardware Efficiency (16GB Limit)}}
+\\label{tab:hardware}
+\\footnotesize
+\\begin{tabularx}{\\columnwidth}{@{}X l c c@{}}
+\\toprule
+\\textbf{Model} & \\textbf{Params} & \\textbf{Latency} & \\textbf{Memory} \\\\
+\\midrule
+Pegasus-PubMed & 568M & \\textbf{2.16s} & 2.8 GB \\\\
+BioMistral-7B & 7B & 4.42s & 5.1 GB \\\\
+Phi-3-Mini & 3.8B & 4.88s & 3.2 GB \\\\
+Gemma-2-2B & 2B & 11.30s & \\textbf{2.4 GB} \\\\
+Qwen-2.5-7B & 7B & 10.64s & 5.2 GB \\\\
+Llama-3.1-8B & 8B & 12.07s & 5.8 GB \\\\
+\\bottomrule
+\\end{tabularx}
+\\end{table}
+
+\\begin{figure}[htbp]
+  \\centering
+  \\includegraphics[width=\\columnwidth]{fig_latency_efficiency.png}
+  \\caption{Hardware Bottlenecks vs. Performance Pareto Trade-off. Shows the latency introduced by deep autoregressive generation loops.}
+  \\label{fig:time_plot}
+\\end{figure}
+
+The older Pegasus model was extremely quick, completing a summary in only 2.16 seconds, and requiring very little memory. The large models, such as Llama and Gemma, required as long as 12 seconds to compress one document even when compressed using the 4-bit method. 
+
+\\section{Qualitative Case Studies: Real World Examples}
+
+The only way to appreciate the seriousness of these hallucinations is to compare the text created by the AI with the original text.
+
+\\subsection{Example 1: The Extrinsic Hallucination}
+\\textbf{Original Medical Abstract:} \\textit{"A study of 50 patients presenting with acute migraine symptoms. Patients were administered 50mg of Sumatriptan. Results showed a 60\\% decrease in photophobia within two hours."}
+
+\\textbf{Pegasus (Old Model) Output:} \\textit{"Patients with acute migraine were administered 50mg of Sumatriptan, resulting in a 60\\% decrease in photophobia."} (Perfect, safe extraction. No new facts added).
+
+\\textbf{BioMistral (Modern Model) Output:} \\textit{"A study showed 50mg of Sumatriptan reduces photophobia in migraine patients. Patients are also advised to rest in a dark, quiet room and stay hydrated to assist the medication."} (Failure. The advice to rest in a dark room is medically true in the real world, but it is an Extrinsic Hallucination. It was not in the original text. BioMistral added its own outside knowledge, corrupting the strict data extraction).
+
+\\subsection{Example 2: The Intrinsic (Fatal) Hallucination}
+\\textbf{Original Medical Abstract:} \\textit{"The patient exhibited severe localized abdominal pain. Blood tests revealed an absence of elevated white blood cells, ruling out acute appendicitis."}
+
+\\textbf{Llama-3.1 (Modern Model) Output:} \\textit{"The patient suffered from severe abdominal pain and elevated white blood cells, indicating acute appendicitis."}
+*(Catastrophic Failure. The causal math lost track of the word "absence". Because abdominal pain and high white blood cells usually go together on the internet, Llama-3 hallucinated the opposite of the truth. If this was put into a patient's permanent record, it would be a critical medical error).*
+
+\\section{Discussion: Ethics, Economics, and the Future}
+
+The findings of this research are huge implications of how hospitals will construct a software over the next five years.
+
+\\subsection{The Legal and Regulatory Danger}
+If an AI hallucination causes harm to a patient who is the one who's at fault? If a hospital uses an automated LLM to summarize a chart, and the LLM hallucinates a fake drug allergy, the hospital could be on the hook for huge legal liabilities. 
+
+At the present time, the medical software is considered a "Medical Device" (SaMD) by global health authorities, such as the FDA in the United States and the EMA in Europe. In the case of the AI that hallucinates 38\\% of the time, such as BioMistral, it will never get regulatory clearance to be used without any human oversight. This is why older, strictly extractive models are still legally safer.
+
+\\subsection{The Economics of Running AI}
+Hospitals use software services on cloud servers (such as Amazon AWS or Microsoft Azure). Their costs are based on an hourly fee for electricity and server space. 
+Suppose that a hospital has to summarize 100,000 patient records in order to modernize its patient database.
+
+*   \\textbf{Using Pegasus (2.16 seconds):} takes ~60 hours of server time. It does not need expensive servers as it consumes of memory just 2.8 GB.
+
+*   \\textbf{Using Llama-3 (12.07 seconds):} This is estimated to require approximately 335 hours of server time. It also demands much higher priced graphics cards.
+
+If the purpose is just to extract data, it's very inefficient to use massive modern AIs as they would be very expensive.
+
+\\subsection{When Should a Hospital Use Which AI?}
+The data provides a clear guideline for hospital IT departments:
+
+*   \\textbf{Scenario A (Fully Automated Systems):}
+If a hospital desires a computer script to automatically retrieve thousands of lab reports at midnight and feed the summaries into a database while everyone is sleeping then it \\textbf{must} be the Pegasus model. This is a completely unchecked job, and safety of mathematics is paramount.
+
+*   \\textbf{Scenario B (Human-in-the-Loop):}
+If a hospital is constructing a tool for a doctor to read a patient chart quicker, it is meant to be used on a doctor's iPad, then use \\textbf{BioMistral}. The doctor is reading the screen and has the precision and concentration to be able to see and ignore any small hallucinations. The doctor will be very grateful for the beautiful and clean formatting BioMistral offers, as it saves her/him from eye strain and time.
+
+\\subsection{Future Solutions: Fixing the Hallucinations}
+How to make modern LLMs safe? There are a number of fixes under way.
+The one main concept is \\textbf{Retrieval-Augmented Generation (RAG)}. A RAG system puts a digital fence around the AI.A RAG system surrounds the AI with a digital fence. Prior to the AI's ability to produce a sentence, a background verification check is performed in a trusted medical database \\cite{shuster2021retrieval}. 
+The other idea is \\textbf{Constitutional AI}. This includes a very large and rigid set of rules embedded in the AI's prompt (e.g., "You are a medical AI. If you make up a fact that isn't in the text you will get the wrong answer. Interestingly, modern LLMs can read these rules and modify their behaviour, just a bit, reducing their hallucination rate \\cite{bai2022constitutional}.
+
+\\section{Conclusion}
+
+Newer and bigger models are better—here's how much I wish I had heard that last week! Everybody would like to use the famous, big conversation AIs for everything. But this is a risky assumption in the high-stakes business of health care, this study shows. 
+
+Based on our experience and mathematical modeling, modern Causal LLMs are designed to interact creatively, not as fact-checkers. They have to guess words and make use of the outside knowledge, and invariably they are subjected to medical hallucinations due to the underlying mathematical design. By contrast, mathematically rigorous Sequence-to-Sequence models are still the undisputed 100\\% safe models, hardly ever producing fake data. 
+
+So, for the foreseeable future, clinical AI developers will need to make informed selections when it comes to tools. We need to live with the safe, robot writing of "older" models that would do automated tasks, and we need to keep the beautiful, but dangerous writing of "modern" LLMs in check, so they can be kept out of places where a real doctor is available to double-check. The holy grail of the next generation of medical AI should be to bring together the safety of the past, which is mathematical, with the incredible intelligence of the present.
+
+\\begin{thebibliography}{99}
+
+\\bibitem{pubmed_stats}
+E.~W. Sayers, E.~E. Bolton, A.~M. Fine, C.~Kelly, S.~Kim,
+M.~Landrum, S.~Lathrop, A.~Malheiro, T.~D. Murphy, L.~Phan,
+S.~Pujar, B.~W. Trawick, V.~A. Schneider, and K.~D. Pruitt,
+``Database resources of the National Center for Biotechnology
+Information in 2026,''
+\\emph{Nucleic Acids Research}, vol. 54, no. D1,
+pp. D20--D27, 2026.
+\\url{https://doi.org/10.1093/nar/gkaf1060}.
+
+
+\\bibitem{vaswani2017attention}
+A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit,
+L. Jones, A. N. Gomez, L. Kaiser, and I. Polosukhin,
+``Attention Is All You Need,''
+in \\emph{Advances in Neural Information Processing Systems},
+vol. 30, pp. 5998--6008, 2017.
+\\url{https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf}.
+
+
+\\bibitem{zhang2020pegasus}
+J.~Zhang, Y.~Zhao, M.~Saleh, and P.~Liu,
+``PEGASUS: Pre-training with Extracted Gap-sentences for
+Abstractive Summarization,''
+in \\emph{Proceedings of the 37th International Conference
+on Machine Learning},
+vol. 119, \\emph{Proceedings of Machine Learning Research},
+pp. 11328--11339, 2020.
+\\url{https://proceedings.mlr.press/v119/zhang20ae.html}.
+
+
+\\bibitem{grattafiori2024llama3}
+A. Grattafiori \\emph{et al.},
+``The Llama 3 Herd of Models,''
+\\emph{arXiv preprint arXiv:2407.21783}, 2024.
+\\url{https://arxiv.org/abs/2407.21783}.
+
+
+\\bibitem{ji2023hallucination}
+Z. Ji, N. Lee, R. Frieske, T. Yu, D. Su, Y. Xu,
+E. Ishii, Y. J. Bang, A. Madotto, and P. Fung,
+``Survey of Hallucination in Natural Language Generation,''
+\\emph{ACM Computing Surveys}, vol. 55, no. 12,
+Art. no. 248, pp. 1--38, 2023.
+\\url{https://doi.org/10.1145/3571730}.
+
+
+\\bibitem{labrak2024biomistral}
+Y. Labrak, A. Bazoge, E. Morin, P.-A. Gourraud,
+M. Rouvier, and R. Dufour,
+``BioMistral: A Collection of Open-Source Pretrained
+Large Language Models for Medical Domains,''
+in \\emph{Findings of the Association for Computational
+Linguistics: ACL 2024},
+pp. 5848--5864,
+Bangkok, Thailand,
+Association for Computational Linguistics, 2024.
+\\url{https://aclanthology.org/2024.findings-acl.348/}.
+
+
+\\bibitem{dettmers2023qlora}
+T. Dettmers, A. Pagnoni, A. Holtzman, and L. Zettlemoyer,
+``QLoRA: Efficient Finetuning of Quantized LLMs,''
+in \\emph{Advances in Neural Information Processing Systems},
+vol. 36, pp. 10088--10115, 2023.
+\\url{https://doi.org/10.52202/075280-0441}.
+
+
+\\bibitem{rehman2023hallucination}
+T. Rehman, R. Mandal, A. Agarwal, and D. K. Sanyal,
+``Hallucination Reduction in Long Input Text Summarization,''
+in \\emph{International Conference on Security, Surveillance and
+Artificial Intelligence (ICSSAI-2023)},
+pp. 307--316, CRC Press, 2024.
+\\url{https://doi.org/10.1201/9781003428459-35}.
+
+
+\\bibitem{rehman2021automatic}
+T. Rehman, D. K. Sanyal, S. Chattopadhyay,
+P. K. Bhowmick, and P. P. Das,
+``Automatic Generation of Research Highlights from
+Scientific Abstracts,''
+in \\emph{Proceedings of the 2nd Workshop on Extraction
+and Evaluation of Knowledge Entities from Scientific
+Documents (EEKE 2021)},
+\\emph{CEUR Workshop Proceedings}, vol. 3004,
+\\url{https://ceur-ws.org/Vol-3004/paper10.pdf}.
+
+
+\\bibitem{rehman2023generation}
+T. Rehman, D. K. Sanyal, S. Chattopadhyay,
+P. K. Bhowmick, and P. P. Das,
+``Generation of Highlights From Research Papers Using
+Pointer-Generator Networks and SciBERT Embeddings,''
+\\emph{IEEE Access}, vol. 11,
+pp. 91358--91374, 2023.
+\\url{https://doi.org/10.1109/ACCESS.2023.3292300}.
+
+
+\\bibitem{rehman2022analysis}
+T. Rehman, S. Das, D. K. Sanyal, and S. Chattopadhyay,
+``An Analysis of Abstractive Text Summarization Using
+Pre-trained Models,''
+in \\emph{Proceedings of the International Conference
+on Computational Intelligence, Data Science and Cloud Computing},
+pp. 253--264, 2022.
+\\url{https://doi.org/10.1007/978-981-19-1657-1_21}.
+
+
+\\bibitem{lin2004rouge}
+C.-Y. Lin,
+``ROUGE: A Package for Automatic Evaluation of Summaries,''
+in \\emph{Text Summarization Branches Out},
+pp. 74--81, Barcelona, Spain,
+Association for Computational Linguistics, 2004.
+\\url{https://aclanthology.org/W04-1013/}.
+
+
+\\bibitem{shuster2021retrieval}
+K. Shuster, S. Poff, M. Chen, D. Kiela, and J. Weston,
+``Retrieval Augmentation Reduces Hallucination in Conversation,''
+in \\emph{Findings of the Association for Computational Linguistics:
+EMNLP 2021},
+pp. 3784--3803,
+Punta Cana, Dominican Republic,
+Association for Computational Linguistics, 2021.
+\\url{https://aclanthology.org/2021.findings-emnlp.320/}.
+
+
+\\bibitem{bai2022constitutional}
+Y. Bai \\emph{et al.},
+``Constitutional AI: Harmlessness from AI Feedback,''
+\\emph{arXiv preprint arXiv:2212.08073}, 2022.
+\\url{https://arxiv.org/abs/2212.08073}.
+
+
+\\bibitem{zhao2023survey}
+W.-X. Zhao \\emph{et al.},
+``A Survey of Large Language Models,''
+\\emph{arXiv preprint arXiv:2303.18223}, 2023.
+\\url{https://arxiv.org/abs/2303.18223}.
+
+
+\\end{thebibliography}
+
+\async function test() {
+  const formData = new FormData();
+  formData.append('filecontents[]', latexCode, { filename: 'document.tex' });
+  formData.append('filename[]', 'document.tex');
+  formData.append('engine', 'pdflatex');
+  formData.append('return', 'pdf');
+
+  try {
+    const res = await axios.post('https://texlive.net/cgi-bin/latexcgi', formData, {
+      headers: formData.getHeaders(),
+      responseType: 'arraybuffer'
+    });
+    
+    const contentType = res.headers['content-type'] || '';
+    if (!contentType.includes('application/pdf')) {
+      const errorLog = Buffer.from(res.data).toString('utf8');
+      console.log("Compilation failed!");
+      const errorMatch = errorLog.match(/!\s(.*?)\n(.*?\n.*?\n)/);
+      if (errorMatch) {
+         console.log(`Error: ${errorMatch[1].trim()}`);
+         console.log(`Context:\n${errorMatch[2].replace(/<[^>]*>?/gm, '')}`);
+      } else {
+         console.log(errorLog.replace(/<[^>]*>?/gm, '').substring(0, 1000));
+      }
+    } else {
+      console.log("Compilation succeeded!");
+    }
+  } catch(e) {
+    console.error(e.message);
+  }
+}
+test();

@@ -1,9 +1,9 @@
 services:
   - type: web
     name: granthastrax-backend
-    env: node
-    buildCommand: npm install
-    startCommand: npm start
+    env: docker
+    dockerfilePath: Dockerfile
+    rootDir: backend
     envVars:
       - key: NODE_ENV
         value: production

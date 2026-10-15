@@ -33,7 +33,7 @@ export function ResearchSidebar({
   const [editingImageId, setEditingImageId] = useState<string | null>(null);
   const [editImageName, setEditImageName] = useState("");
 
-  const compiler = project?.compiler || 'pdflatex';
+  const compiler = project?.compiler || 'tectonic';
   const images: ProjectImage[] = project?.images || [];
 
   const outline = latexContent
@@ -274,6 +274,7 @@ export function ResearchSidebar({
                     <SelectValue placeholder="Select a compiler" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="tectonic">Tectonic (Recommended / Cloud)</SelectItem>
                     <SelectItem value="pdflatex">pdfLaTeX</SelectItem>
                     <SelectItem value="xelatex">XeLaTeX</SelectItem>
                     <SelectItem value="lualatex">LuaLaTeX</SelectItem>

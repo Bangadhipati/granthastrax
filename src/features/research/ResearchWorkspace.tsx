@@ -103,7 +103,8 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
     try {
       const res = await api.post("/api/compile", { 
         content: latexContent,
-        engine: project?.compiler || 'pdflatex'
+        engine: project?.compiler || 'tectonic',
+        images: project?.images || []
       }, { responseType: 'blob' });
       
       if (res.status === 200) {
@@ -137,9 +138,47 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
         alert(errorMsg + "\n\n(Check the console for the full LaTeX error log)");
         console.error("LaTeX Compilation Log:\n", text);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Failed to reach compiler API.");
+      
+      // Axios error handling when responseType is 'blob'
+      if (error.response && error.response.data && error.response.data instanceof Blob) {
+        error.response.data.text().then(text => {
+          try {
+            const errData = JSON.parse(text);
+            alert(errData.details || errData.error || "Failed to compile LaTeX document.");
+          } catch (e) {
+            alert("Failed to compile LaTeX document.");
+          }
+        });
+      } else {
+        alert(error.response?.data?.details || error.response?.data?.error || error.message || "Failed to reach compiler API.");
+      }
+    } finally {
+      setIsCompiling(false);
+    }
+  };
+
+  const handleExportZip = async () => {
+    setIsCompiling(true);
+    try {
+      const res = await api.post("/api/compile/export", { 
+        content: latexContent,
+        images: project?.images || []
+      }, { responseType: 'blob' });
+      
+      const blob = res.data;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${project?.title || "project_source"}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error(error);
+      alert("Failed to export ZIP.");
     } finally {
       setIsCompiling(false);
     }
@@ -181,7 +220,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
         project={project}
         latexContent={latexContent}
         onCompilerChange={(compiler) => saveMutation.mutate({ compiler })}
-        onInsertImage={(url, name) => insertTextAtCursor(`\\includegraphics{${url}} % ${name}\n`)}
+        onInsertImage={(url, name) => insertTextAtCursor(`\\includegraphics{${name}}\n`)}
       />
 
       {/* Main Workspace Area */}
@@ -210,6 +249,15 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
                 <Download className="size-3.5" /> Download PDF
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={handleExportZip}
+              disabled={isCompiling}
+              className="inline-flex items-center gap-2 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              <Download className="size-3.5" /> Export Source (ZIP)
+            </button>
 
             <button
               type="button"

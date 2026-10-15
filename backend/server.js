@@ -248,19 +248,27 @@ app.delete('/api/projects/:id/images/:imageId', requireAuth, async (req, res) =>
   }
 });
 
-// Compile LaTeX via texlive.net proxy to avoid frontend CORS
+// Compile LaTeX to PDF locally using child_process
 app.post('/api/compile', requireAuth, async (req, res) => {
+  const os = require('os');
+  const path = require('path');
+  const { execSync } = require('child_process');
+  const crypto = require('crypto');
+
+  let tmpDir;
   try {
-    let { content, engine = 'pdflatex' } = req.body;
+    let { content, engine = 'pdflatex', images = [] } = req.body;
     if (!content) {
       return res.status(400).json({ error: 'LaTeX content is required' });
     }
 
-    const FormData = require('form-data');
-    const axios = require('axios');
-    const formData = new FormData();
-    
-    // Find all \includegraphics{URL} and download them
+    tmpDir = path.join(os.tmpdir(), 'latex_' + crypto.randomUUID());
+    fs.mkdirSync(tmpDir, { recursive: true });
+
+    // Auto-fix common syntax errors from frontend editors
+    content = content.replace(/\\usepackage\s*(?:\[[^\]]*\])?\s*\{\s*\}/g, ''); // empty {}
+    content = content.replace(/\\usepackage\s*\[\s*\](?!\s*\{)/g, ''); // empty [] not followed by {
+
     const regex = /\\includegraphics(?:\[.*?\])?\{([^}]+)\}/g;
     const downloadedImages = new Map();
     let imageCounter = 0;
@@ -268,61 +276,134 @@ app.post('/api/compile', requireAuth, async (req, res) => {
     const replaceAsync = async (str, regex, asyncFn) => {
       const promises = [];
       str.replace(regex, (match, ...args) => {
-        const promise = asyncFn(match, ...args);
-        promises.push(promise);
+        promises.push(asyncFn(match, ...args));
+        return match;
       });
       const data = await Promise.all(promises);
       return str.replace(regex, () => data.shift());
     };
 
     content = await replaceAsync(content, regex, async (match, url) => {
-      if (url.startsWith('http://') || url.startsWith('https://')) {
+      const projectImg = images.find(img => img.name === url);
+      let downloadUrl = projectImg ? projectImg.url : url;
+      
+      if (downloadUrl.startsWith('http://') || downloadUrl.startsWith('https://')) {
         try {
-          if (!downloadedImages.has(url)) {
-            const imgRes = await axios.get(url, { responseType: 'arraybuffer' });
-            // basic extension detection or fallback to png
-            const urlParts = url.split('?')[0].split('.');
+          if (!downloadedImages.has(downloadUrl)) {
+            const { default: axios } = require('axios');
+            const imgRes = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
+            const urlParts = downloadUrl.split('?')[0].split('.');
             let ext = urlParts.length > 1 ? urlParts.pop() : 'png';
             if (ext.length > 4) ext = 'png'; 
             
             const filename = `image_${imageCounter++}.${ext}`;
-            downloadedImages.set(url, { buffer: imgRes.data, filename });
+            fs.writeFileSync(path.join(tmpDir, filename), Buffer.from(imgRes.data));
+            downloadedImages.set(downloadUrl, { filename });
           }
-          const localFile = downloadedImages.get(url).filename;
+          const localFile = downloadedImages.get(downloadUrl).filename;
           return match.replace(url, localFile);
         } catch (e) {
-          console.error("Failed to download image:", url);
+          console.error("Failed to download image:", downloadUrl);
           return match;
         }
       }
       return match;
     });
 
-    formData.append('filecontents[]', content);
-    formData.append('filename[]', 'document.tex');
+    const texPath = path.join(tmpDir, 'document.tex');
+    fs.writeFileSync(texPath, content, 'utf8');
 
-    // Attach all downloaded images
-    for (const [url, imgData] of downloadedImages.entries()) {
-       formData.append('filecontents[]', imgData.buffer, { filename: imgData.filename });
-       formData.append('filename[]', imgData.filename);
+    // Helper to check if a CLI tool exists on PATH
+    const commandExists = (cmd) => {
+      try {
+        const checker = process.platform === 'win32' ? `where ${cmd}` : `which ${cmd}`;
+        execSync(checker, { stdio: 'ignore' });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    // Determine the active engine
+    let activeEngine = engine;
+    const hasTectonic = commandExists('tectonic');
+    const hasRequested = commandExists(engine);
+
+    if (engine === 'tectonic' || !hasRequested) {
+      if (hasTectonic) {
+        activeEngine = 'tectonic';
+      } else if (!hasRequested) {
+        throw new Error(
+          `Neither '${engine}' nor 'tectonic' is installed on this environment. When running locally, install Tectonic (winget install tectonic) or deploy using the project Dockerfile on Render.`
+        );
+      }
     }
 
-    formData.append('engine', engine);
-    formData.append('return', 'pdf');
+    // Compile document
+    try {
+      if (activeEngine === 'tectonic') {
+        // Tectonic handles multiple passes and downloads needed packages automatically
+        execSync(`tectonic --chatter minimal document.tex`, { 
+          cwd: tmpDir, 
+          stdio: 'pipe',
+          env: { ...process.env, TECTONIC_CACHE_DIR: process.env.TECTONIC_CACHE_DIR || path.join(os.tmpdir(), 'tectonic_cache') }
+        });
+      } else {
+        execSync(`${activeEngine} -interaction=nonstopmode -halt-on-error document.tex`, { cwd: tmpDir, stdio: 'pipe' });
+        // Run second pass to resolve cross-references and citations
+        execSync(`${activeEngine} -interaction=nonstopmode -halt-on-error document.tex`, { cwd: tmpDir, stdio: 'pipe' });
+      }
+    } catch (err) {
+      const logOutput = (err.stderr ? err.stderr.toString() : '') + '\n' + (err.stdout ? err.stdout.toString() : err.message);
+      let cleanError = "LaTeX Compilation failed.";
 
-    const response = await axios.post('https://texlive.net/cgi-bin/latexcgi', formData, {
-      headers: formData.getHeaders(),
-      responseType: 'arraybuffer'
-    });
+      // Match Tectonic error: "error: <details>"
+      const tectonicMatch = logOutput.match(/error:\s*([^\n\r]+(?:\n\s*-->[^\n\r]+)?)/i);
+      if (tectonicMatch) {
+        cleanError = `Tectonic Error: ${tectonicMatch[1].trim()}`;
+      } else {
+        // Match classic LaTeX error: "! <details>"
+        const errorMatch = logOutput.match(/^!\s+(.*?)\n(.*?\n.*?\n)/m);
+        if (errorMatch) {
+          const errorType = errorMatch[1].trim();
+          const errorDetails = errorMatch[2].replace(/<[^>]*>?/gm, '').replace(/\n/g, ' ').trim();
+          cleanError = `LaTeX Error: ${errorType} \nContext: ${errorDetails}`;
+        } else {
+          const fallbackMatch = logOutput.match(/^!\s+(.*?)\n/m);
+          if (fallbackMatch) {
+            cleanError = `LaTeX Error: ${fallbackMatch[1]}`;
+          } else {
+            cleanError = logOutput.substring(0, 1000);
+          }
+        }
+      }
 
-    res.set({
-      'Content-Type': response.headers['content-type'] || 'application/pdf',
-      'Content-Disposition': 'inline; filename="document.pdf"',
-    });
-    res.send(response.data);
+      return res.status(400).json({ error: 'Compilation failed', details: cleanError });
+    }
+
+    const pdfPath = path.join(tmpDir, 'document.pdf');
+    if (fs.existsSync(pdfPath)) {
+      const pdfData = fs.readFileSync(pdfPath);
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': 'inline; filename="document.pdf"',
+      });
+      res.send(pdfData);
+    } else {
+      res.status(500).json({ error: 'PDF was not generated.' });
+    }
+
   } catch (error) {
-    console.error('Compilation proxy error:', error);
-    res.status(500).json({ error: 'Failed to compile LaTeX' });
+    console.error('Local Compilation error:', error);
+    res.status(500).json({ error: 'Failed to compile LaTeX locally', details: error.message });
+  } finally {
+    if (tmpDir && fs.existsSync(tmpDir)) {
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      } catch (e) {
+        console.error('Failed to cleanup tmpDir:', e);
+      }
+    }
   }
 });
 
