@@ -316,10 +316,12 @@ app.post('/api/compile', requireAuth, async (req, res) => {
     const texPath = path.join(tmpDir, 'document.tex');
     fs.writeFileSync(texPath, content, 'utf8');
 
+    const { getTectonicBinary } = require('./tectonicManager');
+
     // Helper to check if a CLI tool exists on PATH
     const commandExists = (cmd) => {
       try {
-        const checker = process.platform === 'win32' ? `where ${cmd}` : `which ${cmd}`;
+        const checker = process.platform === 'win32' ? `where.exe ${cmd}` : `which ${cmd}`;
         execSync(checker, { stdio: 'ignore' });
         return true;
       } catch {
@@ -329,24 +331,20 @@ app.post('/api/compile', requireAuth, async (req, res) => {
 
     // Determine the active engine
     let activeEngine = engine;
-    const hasTectonic = commandExists('tectonic');
+    let tectonicBin = null;
     const hasRequested = commandExists(engine);
 
     if (engine === 'tectonic' || !hasRequested) {
-      if (hasTectonic) {
-        activeEngine = 'tectonic';
-      } else if (!hasRequested) {
-        throw new Error(
-          `Neither '${engine}' nor 'tectonic' is installed on this environment. When running locally, install Tectonic (winget install tectonic) or deploy using the project Dockerfile on Render.`
-        );
-      }
+      // Automatically resolves installed or downloads standalone Tectonic
+      tectonicBin = await getTectonicBinary();
+      activeEngine = 'tectonic';
     }
 
     // Compile document
     try {
       if (activeEngine === 'tectonic') {
-        // Tectonic handles multiple passes and downloads needed packages automatically
-        execSync(`tectonic --chatter minimal document.tex`, { 
+        const binCmd = tectonicBin || await getTectonicBinary();
+        execSync(`${binCmd} --chatter minimal document.tex`, { 
           cwd: tmpDir, 
           stdio: 'pipe',
           env: { ...process.env, TECTONIC_CACHE_DIR: process.env.TECTONIC_CACHE_DIR || path.join(os.tmpdir(), 'tectonic_cache') }
