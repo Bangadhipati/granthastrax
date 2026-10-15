@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { 
   Loader2, AlertCircle, Terminal, Copy, Check, 
   ChevronDown, ChevronUp, RefreshCw 
@@ -38,6 +38,36 @@ export function PdfViewer({
     Page: any;
   } | null>(null);
 
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentSize, setContentSize] = useState<{ width: number; height: number } | null>(null);
+
+  // Measure rendered document dimensions to bind outer scroll boundaries accurately
+  useEffect(() => {
+    if (!contentRef.current) return;
+    const el = contentRef.current;
+    const updateSize = () => {
+      const width = el.offsetWidth || el.scrollWidth;
+      const height = el.offsetHeight || el.scrollHeight;
+      if (width > 0 && height > 0) {
+        setContentSize({ width, height });
+      }
+    };
+    updateSize();
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const width = entry.borderBoxSize?.[0]?.inlineSize || entry.contentRect.width;
+        const height = entry.borderBoxSize?.[0]?.blockSize || entry.contentRect.height;
+        if (width > 0 && height > 0) {
+          setContentSize({ width, height });
+        }
+      }
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [pdfUrl, numPages, PdfComponents]);
+
   // Only import react-pdf at runtime in the browser
   useEffect(() => {
     let cancelled = false;
@@ -62,14 +92,24 @@ export function PdfViewer({
   }, []);
 
   if (isCompiling && !pdfUrl) {
+    const unscaledWidth = 800;
+    const unscaledHeight = 1131;
+    const scaledWidth = Math.round(unscaledWidth * previewZoom);
+    const scaledHeight = Math.round(unscaledHeight * previewZoom);
+
     return (
       <div 
-        className="flex shrink-0 h-[297mm] w-[210mm] items-center justify-center bg-white shadow-xl transition-transform duration-75 origin-top animate-pulse"
-        style={{ transform: `scale(${previewZoom})` }}
+        className="relative shrink-0 flex justify-center"
+        style={{ width: `${scaledWidth}px`, height: `${scaledHeight}px` }}
       >
-        <div className="flex flex-col items-center gap-4 text-muted-foreground">
-          <Loader2 className="size-8 animate-spin text-gold" />
-          <p className="font-medium text-black">Building Document...</p>
+        <div 
+          className="flex h-[1131px] w-[800px] items-center justify-center bg-white shadow-xl origin-top-left transition-transform duration-75 animate-pulse"
+          style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top left' }}
+        >
+          <div className="flex flex-col items-center gap-4 text-muted-foreground">
+            <Loader2 className="size-8 animate-spin text-gold" />
+            <p className="font-medium text-black">Building Document...</p>
+          </div>
         </div>
       </div>
     );
@@ -200,22 +240,37 @@ export function PdfViewer({
 
   // Still loading react-pdf
   if (!PdfComponents) {
+    const unscaledWidth = 800;
+    const unscaledHeight = 1131;
+    const scaledWidth = Math.round(unscaledWidth * previewZoom);
+    const scaledHeight = Math.round(unscaledHeight * previewZoom);
+
     if (pdfUrl) {
       return (
         <div 
-          className="flex h-[400px] w-[210mm] items-center justify-center bg-white shadow-xl"
-          style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top center', transition: 'transform 0.2s ease-in-out' }}
+          className="relative shrink-0 flex justify-center"
+          style={{ width: `${scaledWidth}px`, height: `${scaledHeight}px` }}
         >
-          <Loader2 className="size-8 animate-spin text-gold" />
+          <div 
+            className="flex h-[1131px] w-[800px] items-center justify-center bg-white shadow-xl origin-top-left"
+            style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top left' }}
+          >
+            <Loader2 className="size-8 animate-spin text-gold" />
+          </div>
         </div>
       );
     }
     return (
       <div 
-        className="flex h-[297mm] w-[210mm] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground/60"
-        style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top center', transition: 'transform 0.2s ease-in-out' }}
+        className="relative shrink-0 flex justify-center"
+        style={{ width: `${scaledWidth}px`, height: `${scaledHeight}px` }}
       >
-        <p>Click "Compile" to generate PDF</p>
+        <div 
+          className="flex h-[1131px] w-[800px] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground/60 origin-top-left"
+          style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top left' }}
+        >
+          <p>Click "Compile" to generate PDF</p>
+        </div>
       </div>
     );
   }
@@ -223,53 +278,84 @@ export function PdfViewer({
   const { Document, Page } = PdfComponents;
 
   if (pdfUrl) {
+    const unscaledWidth = contentSize?.width || 800;
+    const unscaledHeight = contentSize?.height || (numPages ? numPages * 1147 : 1147);
+    const scaledWidth = Math.round(unscaledWidth * previewZoom);
+    const scaledHeight = Math.round(unscaledHeight * previewZoom);
+
     return (
       <div 
-        className="relative shrink-0 transition-transform duration-75 origin-top"
-        style={{ transform: `scale(${previewZoom})` }}
+        className="relative shrink-0 flex justify-center"
+        style={{
+          width: `${scaledWidth}px`,
+          height: `${scaledHeight}px`,
+        }}
       >
         {isCompiling && (
-          <div className="sticky top-2 left-1/2 -translate-x-1/2 z-30 mb-2 flex items-center justify-center">
+          <div className="sticky top-2 left-1/2 -translate-x-1/2 z-30 mb-2 flex items-center justify-center pointer-events-none">
             <div className="flex items-center gap-2 rounded-full bg-slate-900/90 text-white px-4 py-1.5 text-xs font-medium shadow-2xl backdrop-blur-md border border-amber-500/40 animate-pulse">
               <Loader2 className="size-3.5 animate-spin text-amber-400" />
               <span>Recompiling PDF...</span>
             </div>
           </div>
         )}
-        <Document
-          file={pdfUrl}
-          onLoadSuccess={onLoadSuccess}
-          loading={
-            <div className="flex h-[400px] w-[210mm] items-center justify-center bg-white shadow-xl">
-              <Loader2 className="size-8 animate-spin text-gold" />
-            </div>
-          }
-          className="flex flex-col gap-4"
+        <div
+          ref={contentRef}
+          className="transition-transform duration-75 origin-top-left"
+          style={{
+            width: `${unscaledWidth}px`,
+            transform: `scale(${previewZoom})`,
+            transformOrigin: 'top left',
+          }}
         >
-          {Array.from(new Array(numPages || 1), (el, index) => (
-            <div key={`page_${index + 1}`} className="shadow-xl bg-white mb-4">
-              <Page
-                pageNumber={index + 1}
-                renderTextLayer={false}
-                renderAnnotationLayer={false}
-                width={800}
-              />
-            </div>
-          ))}
-        </Document>
+          <Document
+            file={pdfUrl}
+            onLoadSuccess={onLoadSuccess}
+            loading={
+              <div className="flex h-[400px] w-[800px] items-center justify-center bg-white shadow-xl">
+                <Loader2 className="size-8 animate-spin text-gold" />
+              </div>
+            }
+            className="flex flex-col gap-4"
+          >
+            {Array.from(new Array(numPages || 1), (el, index) => (
+              <div 
+                key={`page_${index + 1}`} 
+                id={`pdf-page-${index + 1}`}
+                data-page-number={index + 1}
+                className="shadow-xl bg-white"
+              >
+                <Page
+                  pageNumber={index + 1}
+                  renderTextLayer={false}
+                  renderAnnotationLayer={false}
+                  width={800}
+                />
+              </div>
+            ))}
+          </Document>
+        </div>
       </div>
     );
   }
 
+  const emptyWidth = Math.round(800 * previewZoom);
+  const emptyHeight = Math.round(1131 * previewZoom);
+
   return (
     <div 
-      className="flex shrink-0 h-[297mm] w-[210mm] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground transition-transform duration-75 origin-top"
-      style={{ transform: `scale(${previewZoom})` }}
+      className="relative shrink-0 flex justify-center"
+      style={{ width: `${emptyWidth}px`, height: `${emptyHeight}px` }}
     >
-      <div className="flex flex-col items-center gap-3 opacity-50">
-        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mb-2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-        <p className="text-lg font-medium">Ready to Compile</p>
-        <p className="text-sm">Click "Compile to PDF" to generate your document</p>
+      <div 
+        className="flex h-[1131px] w-[800px] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground origin-top-left transition-transform duration-75"
+        style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top left' }}
+      >
+        <div className="flex flex-col items-center gap-3 opacity-50">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mb-2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <p className="text-lg font-medium">Ready to Compile</p>
+          <p className="text-sm">Click "Compile to PDF" to generate your document</p>
+        </div>
       </div>
     </div>
   );

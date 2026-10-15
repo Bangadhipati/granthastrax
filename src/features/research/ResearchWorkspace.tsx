@@ -88,6 +88,15 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
   const [previewZoom, setPreviewZoom] = useState(1);
   
   const editorRef = useRef<ReactCodeMirrorRef>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+
+  const handlePageChange = (newPage: number) => {
+    setPageNumber(newPage);
+    const targetPageEl = document.getElementById(`pdf-page-${newPage}`);
+    if (targetPageEl && previewContainerRef.current) {
+      targetPageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   // Load last compiled PDF for this project from cache on mount / project switch
   useEffect(() => {
@@ -371,7 +380,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
                     <button
                       type="button"
                       disabled={pageNumber <= 1}
-                      onClick={() => setPageNumber(p => p - 1)}
+                      onClick={() => handlePageChange(pageNumber - 1)}
                       className="rounded p-0.5 hover:bg-background disabled:opacity-30"
                     >
                       <ChevronLeft className="size-3" />
@@ -380,7 +389,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
                     <button
                       type="button"
                       disabled={pageNumber >= numPages}
-                      onClick={() => setPageNumber(p => p + 1)}
+                      onClick={() => handlePageChange(pageNumber + 1)}
                       className="rounded p-0.5 hover:bg-background disabled:opacity-30"
                     >
                       <ChevronRight className="size-3" />
@@ -407,10 +416,26 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
               </div>
               
               <div 
-                className="flex-1 overflow-auto p-4 flex justify-center items-start bg-[#525659] shadow-inner"
+                ref={previewContainerRef}
+                className="flex-1 overflow-auto overscroll-contain p-4 flex justify-center items-start bg-[#525659] shadow-inner"
                 onWheel={(e) => {
                   if (e.ctrlKey || e.metaKey) {
                     setPreviewZoom((z) => Math.min(Math.max(0.5, z - e.deltaY * 0.001), 3));
+                  }
+                }}
+                onScroll={(e) => {
+                  const container = e.currentTarget;
+                  const pages = container.querySelectorAll<HTMLElement>('[data-page-number]');
+                  for (const page of pages) {
+                    const rect = page.getBoundingClientRect();
+                    const containerRect = container.getBoundingClientRect();
+                    if (rect.bottom > containerRect.top + 60 && rect.top < containerRect.bottom - 60) {
+                      const p = Number(page.getAttribute('data-page-number'));
+                      if (p && p !== pageNumber) {
+                        setPageNumber(p);
+                      }
+                      break;
+                    }
                   }
                 }}
               >
