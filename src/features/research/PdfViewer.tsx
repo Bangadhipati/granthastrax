@@ -46,7 +46,7 @@ export function PdfViewer({
     return () => { cancelled = true; };
   }, []);
 
-  if (isCompiling) {
+  if (isCompiling && !pdfUrl) {
     return (
       <div 
         className="flex shrink-0 h-[297mm] w-[210mm] items-center justify-center bg-white shadow-xl transition-transform duration-75 origin-top animate-pulse"
@@ -87,9 +87,17 @@ export function PdfViewer({
   if (pdfUrl) {
     return (
       <div 
-        className="shrink-0 transition-transform duration-75 origin-top"
+        className="relative shrink-0 transition-transform duration-75 origin-top"
         style={{ transform: `scale(${previewZoom})` }}
       >
+        {isCompiling && (
+          <div className="sticky top-2 left-1/2 -translate-x-1/2 z-30 mb-2 flex items-center justify-center">
+            <div className="flex items-center gap-2 rounded-full bg-slate-900/90 text-white px-4 py-1.5 text-xs font-medium shadow-2xl backdrop-blur-md border border-amber-500/40 animate-pulse">
+              <Loader2 className="size-3.5 animate-spin text-amber-400" />
+              <span>Recompiling PDF...</span>
+            </div>
+          </div>
+        )}
         <Document
           file={pdfUrl}
           onLoadSuccess={onLoadSuccess}

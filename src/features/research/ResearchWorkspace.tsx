@@ -6,6 +6,7 @@ import { PdfViewer } from "./PdfViewer";
 import { ShareModal } from "./ShareModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { getProjectPdf, saveProjectPdf } from "@/lib/pdfCache";
 import { 
   Loader2, Play, ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
   ArrowLeft, Download
@@ -87,6 +88,21 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
   
   const editorRef = useRef<ReactCodeMirrorRef>(null);
 
+  // Load last compiled PDF for this project from cache on mount / project switch
+  useEffect(() => {
+    let active = true;
+    getProjectPdf(projectId).then(blob => {
+      if (blob && active) {
+        const url = URL.createObjectURL(blob);
+        setPdfUrl(prev => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+      }
+    });
+    return () => { active = false; };
+  }, [projectId]);
+
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
@@ -99,7 +115,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
 
   const handleCompile = async () => {
     setIsCompiling(true);
-    setPdfUrl(null); // Clear previous PDF
+    // Keep existing pdfUrl intact so the user can continue viewing the preview while building
     try {
       const res = await api.post("/api/compile", { 
         content: latexContent,
@@ -115,8 +131,15 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
           alert("Compilation failed! Check the console for the full LaTeX error log.\n\n" + text.substring(0, 500) + "...");
           return;
         }
+
+        // Persist the compiled PDF so it stays cached across refreshes
+        await saveProjectPdf(projectId, blob);
+
         const url = URL.createObjectURL(blob);
-        setPdfUrl(url);
+        setPdfUrl(prev => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
       } else {
         const text = await blob.text();
         
