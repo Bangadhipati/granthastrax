@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, Suspense } from "react";
 import { 
   Book, Settings, Download, UploadCloud, RefreshCw, 
   CheckCircle2, Ruler, Barcode, Loader2, ArrowLeft, ArrowRight,
-  Layers, Check, Sparkles, FileText, Sliders, Scissors
+  Layers, Check, Sparkles, FileText, Sliders, Scissors, Sun
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -94,7 +94,8 @@ function BookViewer3D({
   bookWidth, 
   bookHeight,
   bleedMm = 3,
-  trimBleed = true
+  trimBleed = true,
+  finish = "matte"
 }: { 
   coverUrl: string; 
   spineWidth: number; 
@@ -102,6 +103,7 @@ function BookViewer3D({
   bookHeight: number;
   bleedMm?: number;
   trimBleed?: boolean;
+  finish?: "matte" | "glossy";
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const geosRef = useRef<{
@@ -110,6 +112,8 @@ function BookViewer3D({
     back: THREE.PlaneGeometry;
     imageAspect: number;
   } | null>(null);
+  const materialRef = useRef<THREE.MeshPhysicalMaterial | null>(null);
+  const specLightRef = useRef<THREE.DirectionalLight | null>(null);
 
   // Apply UV mapping based on trimBleed and bleedMm
   const updateUVs = (
@@ -172,6 +176,22 @@ function BookViewer3D({
     }
   }, [trimBleed, bleedMm, bookWidth, bookHeight, spineWidth]);
 
+  // Reactive Finish update (Matte vs Glossy) in real-time
+  useEffect(() => {
+    if (materialRef.current) {
+      const isGlossy = finish === "glossy";
+      materialRef.current.roughness = isGlossy ? 0.12 : 0.82;
+      materialRef.current.metalness = isGlossy ? 0.08 : 0.0;
+      materialRef.current.clearcoat = isGlossy ? 1.0 : 0.0;
+      materialRef.current.clearcoatRoughness = isGlossy ? 0.08 : 0.8;
+      materialRef.current.reflectivity = isGlossy ? 0.9 : 0.1;
+      materialRef.current.needsUpdate = true;
+    }
+    if (specLightRef.current) {
+      specLightRef.current.intensity = finish === "glossy" ? 1.2 : 0.35;
+    }
+  }, [finish]);
+
   // Main 3D scene setup
   useEffect(() => {
     if (!mountRef.current || !coverUrl) return;
@@ -209,6 +229,12 @@ function BookViewer3D({
     fillLight.position.set(-5, 0, -5);
     scene.add(fillLight);
 
+    // Specular highlight light for glossy sheen reflection
+    const specLight = new THREE.DirectionalLight(0xffffff, finish === "glossy" ? 1.2 : 0.35);
+    specLight.position.set(2, 6, 8);
+    scene.add(specLight);
+    specLightRef.current = specLight;
+
     let animId: number;
 
     // Load Texture
@@ -220,11 +246,17 @@ function BookViewer3D({
         ? texture.image.width / texture.image.height 
         : 1.5;
 
-      const coverMaterial = new THREE.MeshStandardMaterial({ 
+      const isGlossy = finish === "glossy";
+      const coverMaterial = new THREE.MeshPhysicalMaterial({ 
         map: texture, 
-        roughness: 0.35,
-        metalness: 0.05
+        roughness: isGlossy ? 0.12 : 0.82,
+        metalness: isGlossy ? 0.08 : 0.0,
+        clearcoat: isGlossy ? 1.0 : 0.0,
+        clearcoatRoughness: isGlossy ? 0.08 : 0.8,
+        reflectivity: isGlossy ? 0.9 : 0.1,
       });
+      materialRef.current = coverMaterial;
+
       const pageMaterial = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.8 });
 
       const frontGeo = new THREE.PlaneGeometry(w, h);
@@ -292,6 +324,8 @@ function BookViewer3D({
       window.removeEventListener('resize', handleResize);
       controls.dispose();
       geosRef.current = null;
+      materialRef.current = null;
+      specLightRef.current = null;
       if (mountRef.current && renderer.domElement.parentNode === mountRef.current) {
         mountRef.current.removeChild(renderer.domElement);
       }
@@ -379,6 +413,7 @@ export function WriterView() {
   const [customCoverUrl, setCustomCoverUrl] = useState<string | null>(null);
   const [trimBleed, setTrimBleed] = useState(true);
   const [bleedCutMm, setBleedCutMm] = useState(3);
+  const [coverFinish, setCoverFinish] = useState<"matte" | "glossy">("matte");
 
   // Live estimated dimensions
   const estimatedSpine = Math.max(3, (pageCount * (GSM_THICKNESS[gsm] ?? 0.0635)) + (coverType === 'hardcover' ? 6 : 0));
@@ -1017,21 +1052,67 @@ export function WriterView() {
             {/* 3D Canvas (Left 8 cols on desktop) */}
             <div className="lg:col-span-8 xl:col-span-9">
               <Panel className="p-0 overflow-hidden relative shadow-lg">
-                <div className="absolute top-4 left-4 bg-background/85 backdrop-blur-md p-2.5 rounded-md border border-border z-10 pointer-events-none">
-                  <p className="text-xs font-semibold flex items-center gap-2 text-foreground">
-                    <RefreshCw className="w-3.5 h-3.5 text-gold"/> Interactive 3D Mockup
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Left-click drag to rotate • Scroll to zoom</p>
-                  {trimBleed ? (
-                    <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full w-fit">
-                      <Scissors className="size-3" />
-                      <span>Outer bleed chopped ({formatDim(bleedCutMm, unit)} trimmed)</span>
+                {/* Small, Premium Floating HUD Pill (Top Left) */}
+                <div className="absolute top-3.5 left-3.5 flex items-center gap-2 z-10 pointer-events-none select-none">
+                  <div className="flex items-center gap-2 bg-background/80 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-border/70 shadow-sm text-[11px]">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-gold" />
+                      <span className="font-semibold text-foreground tracking-tight text-[11px]">3D Mockup</span>
                     </div>
-                  ) : (
-                    <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full w-fit">
-                      <span>Raw un-trimmed view (0 {unit} chopped — outer margins shown)</span>
-                    </div>
-                  )}
+                    <span className="text-border text-[10px]">|</span>
+                    <span className={`text-[10px] font-mono font-semibold uppercase px-1.5 py-0.5 rounded ${
+                      coverFinish === 'glossy' 
+                        ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' 
+                        : 'bg-secondary text-muted-foreground border border-border/60'
+                    }`}>
+                      {coverFinish}
+                    </span>
+                    <span className="text-border text-[10px]">|</span>
+                    <span className={`text-[10px] font-mono ${
+                      trimBleed ? 'text-emerald-400' : 'text-amber-400/90'
+                    }`}>
+                      {trimBleed ? `Bleed Cut (-${formatDim(bleedCutMm, unit, false)})` : 'Raw Spread'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Quick Finish Switcher (Top Right on 3D Canvas) */}
+                <div className="absolute top-3.5 right-3.5 flex items-center gap-1.5 z-10">
+                  <div className="flex items-center p-0.5 rounded-full bg-background/85 backdrop-blur-md border border-border/80 shadow-md">
+                    <button
+                      type="button"
+                      onClick={() => setCoverFinish("matte")}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
+                        coverFinish === "matte"
+                          ? "bg-gold text-black font-semibold shadow-xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                      title="Matte finish: velvety, non-reflective, soft-touch texture"
+                    >
+                      <Sparkles className="size-3" />
+                      <span>Matte</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCoverFinish("glossy")}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
+                        coverFinish === "glossy"
+                          ? "bg-gold text-black font-semibold shadow-xs"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                      title="Glossy finish: vibrant, high-sheen lacquer with reflective highlights"
+                    >
+                      <Sun className="size-3" />
+                      <span>Glossy</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Discreet Interaction Hint (Bottom Center) */}
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none select-none">
+                  <span className="text-[10px] text-muted-foreground/80 bg-background/60 backdrop-blur-sm px-2.5 py-0.5 rounded-full border border-border/40 font-mono tracking-tight shadow-xs">
+                    Drag to rotate • Scroll to zoom
+                  </span>
                 </div>
                 
                 {customCoverUrl && (
@@ -1043,6 +1124,7 @@ export function WriterView() {
                       bookHeight={selectedSize.h} 
                       bleedMm={bleedCutMm}
                       trimBleed={trimBleed}
+                      finish={coverFinish}
                     />
                   </Suspense>
                 )}
@@ -1085,6 +1167,55 @@ export function WriterView() {
                   <div className="flex justify-between items-center pt-2">
                     <span className="text-muted-foreground">Cover Format</span>
                     <span className="font-medium text-foreground capitalize">{coverType}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-muted-foreground">Cover Finish</span>
+                    <span className="font-medium text-foreground capitalize flex items-center gap-1.5 font-mono">
+                      <span className={`w-1.5 h-1.5 rounded-full ${coverFinish === 'glossy' ? 'bg-amber-400' : 'bg-slate-400'}`} />
+                      {coverFinish}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Cover Finish Lamination Card */}
+                <div className="p-3.5 rounded-lg border border-border bg-card/60 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                      <Sparkles className="size-3.5 text-gold" />
+                      <span>Cover Finish Lamination</span>
+                    </div>
+                    <span className="text-[10px] font-mono uppercase bg-gold/15 text-gold px-1.5 py-0.5 rounded font-semibold">
+                      {coverFinish}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Select the lamination effect to test light reflection and sheen on your book cover.
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setCoverFinish("matte")}
+                      className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded text-xs font-medium border transition-all cursor-pointer ${
+                        coverFinish === "matte"
+                          ? "bg-gold text-black border-gold font-semibold shadow-xs"
+                          : "bg-secondary/70 border-border text-muted-foreground hover:text-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      <Sparkles className="size-3.5" />
+                      <span>Matte</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCoverFinish("glossy")}
+                      className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded text-xs font-medium border transition-all cursor-pointer ${
+                        coverFinish === "glossy"
+                          ? "bg-gold text-black border-gold font-semibold shadow-xs"
+                          : "bg-secondary/70 border-border text-muted-foreground hover:text-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      <Sun className="size-3.5" />
+                      <span>Glossy</span>
+                    </button>
                   </div>
                 </div>
 
