@@ -1,5 +1,7 @@
 # GranthAstraX ⚡
 
+
+
 <div align="center">
 
 ![GranthAstraX Banner](https://img.shields.io/badge/GranthAstraX-Precision%20Studio-D4AF37?style=for-the-badge&logo=latex&logoColor=black)
@@ -22,30 +24,6 @@
 ### [🌐 Launch GranthAstraX Studio](https://granthastrax.netlify.app/) • [📡 Backend Status](https://granthastrax.onrender.com/health) • [📖 Documentation](#table-of-contents)
 
 </div>
-
----
-
-## 📑 Table of Contents
-
-- [Overview](#-overview)
-- [Core Studios & Capabilities](#-core-studios--capabilities)
-  - [1. Research Studio (Overleaf-Grade LaTeX Workspace)](#1-research-studio-overleaf-grade-latex-workspace)
-  - [2. Writer Desk (Industrial Book Production & 3D Mockup)](#2-writer-desk-industrial-book-production--3d-mockup)
-  - [3. Document Studio (Universal Document Conversion)](#3-document-studio-universal-document-conversion)
-  - [4. Image Studio (High-Performance Vector & Raster Processing)](#4-image-studio-high-performance-vector--raster-processing)
-- [System Architecture](#-system-architecture)
-- [Tech Stack](#-tech-stack)
-- [Getting Started (Local Development)](#-getting-started-local-development)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Environment Variables](#environment-variables)
-  - [Running the App](#running-the-app)
-- [Production Deployment](#-production-deployment)
-  - [Frontend (Netlify)](#frontend-netlify)
-  - [Backend (Render + Docker)](#backend-render--docker)
-- [REST API Reference](#-rest-api-reference)
-- [Contributing](#-contributing)
-- [Author & Acknowledgments](#-author--acknowledgments)
 
 ---
 
@@ -125,6 +103,40 @@ A media engineering utility powered by Libvips:
 
 ---
 
+## 📸 Prototype Screenshots & Visual Showcase
+
+### 1. Studio Hub & Landing Platform
+
+
+<br/>
+
+### 2. Research Studio (Overleaf-Grade LaTeX Workspace)
+
+
+<br/>
+
+### 3. Writer Desk (Interactive 3D Book Mockup & Lamination)
+
+
+<br/>
+
+### 4. Writer Desk (2D Blueprint & GS1 Bookland Barcode)
+
+
+<br/>
+
+### 5. Document Studio (Universal Document Conversion)
+
+
+<br/>
+
+### 6. Image Studio (Vectorization & Transcoding)
+
+
+</div>
+
+---
+
 ## 🏗 System Architecture
 
 ```mermaid
@@ -166,21 +178,76 @@ flowchart TD
 
 ## 💻 Tech Stack
 
-| Layer | Technology | Description |
+### 🎨 Frontend & UI Architecture
+<p align="left">
+  <img src="https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React 19" />
+  <img src="https://img.shields.io/badge/TypeScript_5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Vite_6-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/TanStack_Router-FF4154?style=for-the-badge&logo=react-table&logoColor=white" alt="TanStack Router" />
+  <img src="https://img.shields.io/badge/TanStack_Query-FF4154?style=for-the-badge&logo=react-query&logoColor=white" alt="TanStack Query" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS_v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS v4" />
+  <img src="https://img.shields.io/badge/Radix_UI-161618?style=for-the-badge&logo=radix-ui&logoColor=white" alt="Radix UI" />
+  <img src="https://img.shields.io/badge/Framer_Motion-0055FF?style=for-the-badge&logo=framer&logoColor=white" alt="Framer Motion" />
+  <img src="https://img.shields.io/badge/Lucide_Icons-F97316?style=for-the-badge&logo=lucide&logoColor=white" alt="Lucide Icons" />
+  <img src="https://img.shields.io/badge/Sonner_Toasts-000000?style=for-the-badge&logo=sonarqube&logoColor=white" alt="Sonner" />
+</p>
+
+### 📐 3D Graphics, Editors & Barcode
+<p align="left">
+  <img src="https://img.shields.io/badge/Three.js-000000?style=for-the-badge&logo=three.js&logoColor=white" alt="Three.js" />
+  <img src="https://img.shields.io/badge/TipTap_Editor-222222?style=for-the-badge&logo=markdown&logoColor=white" alt="TipTap" />
+  <img src="https://img.shields.io/badge/CodeMirror_6-D32F2F?style=for-the-badge&logo=codemirror&logoColor=white" alt="CodeMirror 6" />
+  <img src="https://img.shields.io/badge/bwip--js-1A1A1A?style=for-the-badge&logo=barcode&logoColor=white" alt="bwip-js" />
+  <img src="https://img.shields.io/badge/ImageTracerJS-FF9900?style=for-the-badge&logo=svg&logoColor=white" alt="ImageTracerJS" />
+</p>
+
+### ⚙️ Backend, Engines & Microservices
+<p align="left">
+  <img src="https://img.shields.io/badge/Node.js_20-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node.js 20" />
+  <img src="https://img.shields.io/badge/Express.js_5-000000?style=for-the-badge&logo=express&logoColor=white" alt="Express 5" />
+  <img src="https://img.shields.io/badge/MongoDB_Atlas-47A248?style=for-the-badge&logo=mongodb&logoColor=white" alt="MongoDB Atlas" />
+  <img src="https://img.shields.io/badge/Mongoose-880000?style=for-the-badge&logo=mongodb&logoColor=white" alt="Mongoose" />
+  <img src="https://img.shields.io/badge/Tectonic_LaTeX-008080?style=for-the-badge&logo=latex&logoColor=white" alt="Tectonic LaTeX" />
+  <img src="https://img.shields.io/badge/Sharp_Libvips-990000?style=for-the-badge&logo=sharp&logoColor=white" alt="Sharp" />
+  <img src="https://img.shields.io/badge/PDFKit-E0234E?style=for-the-badge&logo=adobeacrobatreader&logoColor=white" alt="PDFKit" />
+  <img src="https://img.shields.io/badge/pdf--lib-E0234E?style=for-the-badge&logo=adobeacrobatreader&logoColor=white" alt="pdf-lib" />
+  <img src="https://img.shields.io/badge/Puppeteer_Chromium-40B5A4?style=for-the-badge&logo=puppeteer&logoColor=white" alt="Puppeteer" />
+  <img src="https://img.shields.io/badge/Mammoth.js-4285F4?style=for-the-badge&logo=googledocs&logoColor=white" alt="Mammoth" />
+  <img src="https://img.shields.io/badge/adm--zip-FF6F00?style=for-the-badge&logo=archive&logoColor=white" alt="adm-zip" />
+</p>
+
+### ☁️ Cloud, Security & Infrastructure
+<p align="left">
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/Netlify-00C7B7?style=for-the-badge&logo=netlify&logoColor=white" alt="Netlify" />
+  <img src="https://img.shields.io/badge/Render-46E3B7?style=for-the-badge&logo=render&logoColor=white" alt="Render" />
+  <img src="https://img.shields.io/badge/Firebase_Auth-FFCA28?style=for-the-badge&logo=firebase&logoColor=black" alt="Firebase Auth" />
+  <img src="https://img.shields.io/badge/Cloudinary-3448C5?style=for-the-badge&logo=cloudinary&logoColor=white" alt="Cloudinary" />
+  <img src="https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white" alt="Git" />
+</p>
+
+---
+
+### Detailed Technology Matrix
+
+| Layer | Technology & Shield Badge | Description |
 | :--- | :--- | :--- |
-| **Frontend Framework** | [React 19](https://react.dev/) | Latest React concurrent architecture |
-| **Routing & State** | [TanStack Router](https://tanstack.com/router) & [React Query](https://tanstack.com/query) | Type-safe client-side routing & cache |
-| **Styling** | [Tailwind CSS v4](https://tailwindcss.com/) & [Radix UI](https://www.radix-ui.com/) | Themeable, accessible luxury design system |
-| **3D Graphics** | [Three.js](https://threejs.org/) | WebGL physically-based book rendering |
-| **Rich Text & Code** | [TipTap](https://tiptap.dev/) & [CodeMirror 6](https://codemirror.net/) | WYSIWYG editor and syntax-highlighted LaTeX |
-| **Backend Runtime** | [Node.js 20](https://nodejs.org/) & [Express 5](https://expressjs.com/) | RESTful API server |
-| **Database** | [MongoDB Atlas](https://www.mongodb.com/) via [Mongoose](https://mongoosejs.com/) | User project schemas & metadata storage |
-| **LaTeX Engine** | [Tectonic](https://tectonic-typesetting.github.io/) | Rust-powered self-contained TeX compiler |
-| **Image Processing** | [Sharp](https://sharp.pixelplumbing.com/) (Libvips) | Ultra-fast image resizing & transcoding |
-| **PDF Generation** | [PDFKit](https://pdfkit.org/) & [pdf-lib](https://pdf-lib.js.org/) | Vector print cover template generation |
-| **Barcodes** | [bwip-js](https://github.com/metafloor/bwip-js) | GS1 Bookland EAN-13 + EAN-5 barcodes |
-| **Containerization** | [Docker](https://www.docker.com/) | Reproducible backend environment |
-| **Deployment** | [Netlify](https://www.netlify.com/) & [Render](https://render.com/) | Edge frontend & containerized cloud service |
+| **Frontend Framework** | [![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/) | React 19 concurrent state and component architecture |
+| **Type System** | [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) | End-to-end static type safety |
+| **Build Tooling** | [![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/) | Sub-millisecond HMR and optimized production bundling |
+| **Routing & Cache** | [![TanStack](https://img.shields.io/badge/TanStack_Router_%26_Query-FF4154?style=flat-square&logo=react-table&logoColor=white)](https://tanstack.com/) | 100% type-safe client-side routing & asynchronous cache |
+| **Styling & Design** | [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_v4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/) [![Radix UI](https://img.shields.io/badge/Radix_UI-161618?style=flat-square&logo=radix-ui&logoColor=white)](https://www.radix-ui.com/) | Luxury glassmorphic styling & accessible primitive components |
+| **3D Rendering** | [![Three.js](https://img.shields.io/badge/Three.js-000000?style=flat-square&logo=three.js&logoColor=white)](https://threejs.org/) | WebGL physically-based book simulation (Glossy/Matte PBR) |
+| **Rich Text Editor** | [![TipTap](https://img.shields.io/badge/TipTap-222222?style=flat-square&logo=markdown&logoColor=white)](https://tiptap.dev/) | Headless WYSIWYG document editor with real-time AST export |
+| **Code Editor** | [![CodeMirror](https://img.shields.io/badge/CodeMirror_6-D32F2F?style=flat-square&logo=codemirror&logoColor=white)](https://codemirror.net/) | Syntax-highlighted live LaTeX editing environment |
+| **Backend Runtime** | [![Node.js](https://img.shields.io/badge/Node.js_20-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/) [![Express](https://img.shields.io/badge/Express_5-000000?style=flat-square&logo=express&logoColor=white)](https://expressjs.com/) | High-throughput asynchronous REST API service |
+| **Database** | [![MongoDB](https://img.shields.io/badge/MongoDB_Atlas-47A248?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/) [![Mongoose](https://img.shields.io/badge/Mongoose-880000?style=flat-square&logo=mongodb&logoColor=white)](https://mongoosejs.com/) | Cloud document persistence for projects and workspace assets |
+| **LaTeX Engine** | [![Tectonic](https://img.shields.io/badge/Tectonic_LaTeX-008080?style=flat-square&logo=latex&logoColor=white)](https://tectonic-typesetting.github.io/) | Self-contained, on-demand Rust LaTeX compiler in Docker |
+| **Media Processing** | [![Sharp](https://img.shields.io/badge/Sharp_Libvips-990000?style=flat-square&logo=sharp&logoColor=white)](https://sharp.pixelplumbing.com/) | Multi-threaded image transcoding, vectorization & compression |
+| **PDF Engineering** | [![PDFKit](https://img.shields.io/badge/PDFKit_%26_pdf--lib-E0234E?style=flat-square&logo=adobeacrobatreader&logoColor=white)](https://pdfkit.org/) | Vector print template blueprint generation with bleed/safe zones |
+| **Barcode Engine** | [![bwip-js](https://img.shields.io/badge/bwip--js-1A1A1A?style=flat-square&logo=barcode&logoColor=white)](https://github.com/metafloor/bwip-js) | GS1 / BISG Bookland EAN-13 + EAN-5 retail barcode generation |
+| **Container & Cloud** | [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/) [![Render](https://img.shields.io/badge/Render-46E3B7?style=flat-square&logo=render&logoColor=white)](https://render.com/) [![Netlify](https://img.shields.io/badge/Netlify-00C7B7?style=flat-square&logo=netlify&logoColor=white)](https://www.netlify.com/) | Containerized microservice deployment & CDN edge distribution |
+| **Auth & Media CDN** | [![Firebase](https://img.shields.io/badge/Firebase_Auth-FFCA28?style=flat-square&logo=firebase&logoColor=black)](https://firebase.google.com/) [![Cloudinary](https://img.shields.io/badge/Cloudinary-3448C5?style=flat-square&logo=cloudinary&logoColor=white)](https://cloudinary.com/) | User authentication & cloud figure asset hosting |
 
 ---
 

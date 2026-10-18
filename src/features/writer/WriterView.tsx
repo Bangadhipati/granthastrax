@@ -73,7 +73,7 @@ function setPlaneUVs(
   vMin: number,
   vMax: number
 ) {
-  const uv = geo.attributes.uv;
+  const uv = geo.attributes['uv'];
   if (!uv) return;
   // PlaneGeometry vertices:
   // 0: top-left (-w/2, +h/2) -> (uMin, vMax)
@@ -87,6 +87,75 @@ function setPlaneUVs(
   uv.needsUpdate = true;
 }
 
+// Helper to create a procedural default cover texture if user hasn't uploaded one or while loading
+function createDefaultCoverTexture(title: string, author: string, width = 1024, height = 768) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  // Background gradient: luxury obsidian/charcoal
+  const grad = ctx.createLinearGradient(0, 0, width, height);
+  grad.addColorStop(0, '#1c1e24');
+  grad.addColorStop(0.5, '#13151a');
+  grad.addColorStop(1, '#0c0d10');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, width, height);
+
+  // Decorative border
+  ctx.strokeStyle = '#d4af37';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(24, 24, width - 48, height - 48);
+
+  // Thin inner border
+  ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(36, 36, width - 72, height - 72);
+
+  // Spine separator guide line (dashed)
+  ctx.strokeStyle = 'rgba(212, 175, 55, 0.35)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([8, 8]);
+  ctx.beginPath();
+  ctx.moveTo(width / 2, 24);
+  ctx.lineTo(width / 2, height - 24);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Front cover side: Title
+  ctx.fillStyle = '#f5f5f7';
+  ctx.font = 'bold 36px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const displayTitle = title.length > 24 ? title.substring(0, 22) + '...' : (title || 'GranthAstraX Book');
+  ctx.fillText(displayTitle, (width * 3) / 4, height / 2 - 40);
+
+  // Front cover side: Author
+  ctx.fillStyle = '#d4af37';
+  ctx.font = '500 22px sans-serif';
+  const displayAuthor = author ? `by ${author}` : 'Precision Studio Edition';
+  ctx.fillText(displayAuthor, (width * 3) / 4, height / 2 + 25);
+
+  // Spine text
+  ctx.save();
+  ctx.translate(width / 2, height / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillStyle = 'rgba(212, 175, 55, 0.7)';
+  ctx.font = '600 16px sans-serif';
+  ctx.fillText(displayTitle, 0, 0);
+  ctx.restore();
+
+  // Back cover hint
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.font = '16px sans-serif';
+  ctx.fillText('Back Cover', width / 4, height / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 // --- 3D Book Viewer Component ---
 function BookViewer3D({ 
   coverUrl, 
@@ -95,15 +164,19 @@ function BookViewer3D({
   bookHeight,
   bleedMm = 3,
   trimBleed = true,
-  finish = "matte"
+  finish = "matte",
+  title = "My Epic Novel",
+  author = "Author Name"
 }: { 
-  coverUrl: string; 
+  coverUrl?: string | null; 
   spineWidth: number; 
   bookWidth: number; 
   bookHeight: number;
   bleedMm?: number;
   trimBleed?: boolean;
   finish?: "matte" | "glossy";
+  title?: string;
+  author?: string;
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const geosRef = useRef<{
@@ -194,20 +267,24 @@ function BookViewer3D({
 
   // Main 3D scene setup
   useEffect(() => {
-    if (!mountRef.current || !coverUrl) return;
+    if (!mountRef.current) return;
 
     const scale = 0.02;
-    const w = bookWidth * scale;
-    const h = bookHeight * scale;
-    const d = spineWidth * scale;
+    const w = Math.max(bookWidth * scale, 0.5);
+    const h = Math.max(bookHeight * scale, 0.5);
+    const d = Math.max(spineWidth * scale, 0.08);
+
+    const containerW = mountRef.current.clientWidth || mountRef.current.offsetWidth || 800;
+    const containerH = mountRef.current.clientHeight || mountRef.current.offsetHeight || 520;
+    const safeAspect = containerH > 0 ? containerW / containerH : 1.5;
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, mountRef.current.clientWidth / mountRef.current.clientHeight, 0.1, 100);
-    camera.position.set(0, 1.5, 7.5);
+    const camera = new THREE.PerspectiveCamera(45, safeAspect, 0.1, 100);
+    camera.position.set(0, 1.2, 7.5);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(containerW, containerH);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.domElement.style.touchAction = 'none';
     renderer.domElement.style.display = 'block';
     renderer.domElement.style.width = '100%';
@@ -222,21 +299,20 @@ function BookViewer3D({
     controls.enableZoom = true;
     controls.zoomSpeed = 1.0;
     controls.enablePan = false; // Keep book centered while orbiting
-    controls.minDistance = 2.5;
+    controls.minDistance = 2.0;
     controls.maxDistance = 18;
     controls.target.set(0, 0, 0);
     controls.update();
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     scene.add(ambientLight);
     
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
-    dirLight.position.set(5, 5, 5);
-    dirLight.castShadow = true;
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(5, 6, 5);
     scene.add(dirLight);
 
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.35);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
     fillLight.position.set(-5, 0, -5);
     scene.add(fillLight);
 
@@ -246,9 +322,103 @@ function BookViewer3D({
     scene.add(specLight);
     specLightRef.current = specLight;
 
-    let animId: number;
+    // Materials: Start with default procedural texture so the book is NEVER blank
+    const defaultTexture = createDefaultCoverTexture(title, author);
+    const isGlossy = finish === "glossy";
+    const coverMaterial = new THREE.MeshPhysicalMaterial({ 
+      map: defaultTexture, 
+      roughness: isGlossy ? 0.12 : 0.82,
+      metalness: isGlossy ? 0.08 : 0.0,
+      clearcoat: isGlossy ? 1.0 : 0.0,
+      clearcoatRoughness: isGlossy ? 0.08 : 0.8,
+      reflectivity: isGlossy ? 0.9 : 0.1,
+    });
+    materialRef.current = coverMaterial;
 
-    // Animation Loop runs continuously so OrbitControls and rendering are active from frame 1
+    const pageMaterial = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.85 });
+
+    // Geometries
+    const frontGeo = new THREE.PlaneGeometry(w, h);
+    const spineGeo = new THREE.PlaneGeometry(d, h);
+    const backGeo = new THREE.PlaneGeometry(w, h);
+
+    geosRef.current = {
+      front: frontGeo,
+      spine: spineGeo,
+      back: backGeo,
+      imageAspect: 1.5
+    };
+
+    updateUVs(1.5, geosRef.current);
+
+    const bookGroup = new THREE.Group();
+
+    // Front Cover Plane
+    const frontMesh = new THREE.Mesh(frontGeo, coverMaterial);
+    frontMesh.position.set(0, 0, d/2);
+    bookGroup.add(frontMesh);
+
+    // Spine Plane
+    const spineMesh = new THREE.Mesh(spineGeo, coverMaterial);
+    spineMesh.position.set(-w/2, 0, 0);
+    spineMesh.rotation.y = -Math.PI / 2;
+    bookGroup.add(spineMesh);
+
+    // Back Cover Plane
+    const backMesh = new THREE.Mesh(backGeo, coverMaterial);
+    backMesh.position.set(0, 0, -d/2);
+    backMesh.rotation.y = Math.PI; // Face backwards
+    bookGroup.add(backMesh);
+
+    // Pages (Inner block)
+    const pagesGeo = new THREE.BoxGeometry(Math.max(w - 0.03, 0.1), Math.max(h - 0.03, 0.1), Math.max(d - 0.015, 0.04));
+    const pagesMesh = new THREE.Mesh(pagesGeo, pageMaterial);
+    pagesMesh.position.set(0.015, 0, 0);
+    bookGroup.add(pagesMesh);
+
+    // Center and angle the book nicely
+    bookGroup.rotation.y = -Math.PI / 4;
+    scene.add(bookGroup);
+
+    // If a custom cover image is supplied, load it into coverMaterial
+    if (coverUrl) {
+      const applyTexture = (tex: THREE.Texture, aspect: number) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        coverMaterial.map = tex;
+        coverMaterial.needsUpdate = true;
+        if (geosRef.current) {
+          geosRef.current.imageAspect = aspect;
+          updateUVs(aspect, geosRef.current);
+        }
+      };
+
+      const textureLoader = new THREE.TextureLoader();
+      textureLoader.setCrossOrigin('');
+      textureLoader.load(
+        coverUrl,
+        (texture) => {
+          const imageAspect = (texture.image && texture.image.width && texture.image.height) 
+            ? texture.image.width / texture.image.height 
+            : 1.5;
+          applyTexture(texture, imageAspect);
+        },
+        undefined,
+        () => {
+          // Direct HTMLImageElement fallback in case TextureLoader hits any CORS/scheme constraint
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const fallbackTex = new THREE.CanvasTexture(img);
+            const aspect = (img.width && img.height) ? img.width / img.height : 1.5;
+            applyTexture(fallbackTex, aspect);
+          };
+          img.src = coverUrl;
+        }
+      );
+    }
+
+    let animId: number;
+    // Animation Loop runs continuously from frame 1
     const animate = () => {
       animId = requestAnimationFrame(animate);
       controls.update();
@@ -256,83 +426,38 @@ function BookViewer3D({
     };
     animate();
 
-    // Load Texture and build book meshes
-    const textureLoader = new THREE.TextureLoader();
-    textureLoader.load(coverUrl, (texture) => {
-      texture.colorSpace = THREE.SRGBColorSpace;
-      
-      const imageAspect = (texture.image && texture.image.width && texture.image.height) 
-        ? texture.image.width / texture.image.height 
-        : 1.5;
-
-      const isGlossy = finish === "glossy";
-      const coverMaterial = new THREE.MeshPhysicalMaterial({ 
-        map: texture, 
-        roughness: isGlossy ? 0.12 : 0.82,
-        metalness: isGlossy ? 0.08 : 0.0,
-        clearcoat: isGlossy ? 1.0 : 0.0,
-        clearcoatRoughness: isGlossy ? 0.08 : 0.8,
-        reflectivity: isGlossy ? 0.9 : 0.1,
-      });
-      materialRef.current = coverMaterial;
-
-      const pageMaterial = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.8 });
-
-      const frontGeo = new THREE.PlaneGeometry(w, h);
-      const spineGeo = new THREE.PlaneGeometry(d, h);
-      const backGeo = new THREE.PlaneGeometry(w, h);
-
-      geosRef.current = {
-        front: frontGeo,
-        spine: spineGeo,
-        back: backGeo,
-        imageAspect
-      };
-
-      // Set initial UVs
-      updateUVs(imageAspect, geosRef.current);
-
-      const bookGroup = new THREE.Group();
-
-      // Front Cover Plane
-      const frontMesh = new THREE.Mesh(frontGeo, coverMaterial);
-      frontMesh.position.set(0, 0, d/2);
-      bookGroup.add(frontMesh);
-
-      // Spine Plane
-      const spineMesh = new THREE.Mesh(spineGeo, coverMaterial);
-      spineMesh.position.set(-w/2, 0, 0);
-      spineMesh.rotation.y = -Math.PI / 2;
-      bookGroup.add(spineMesh);
-
-      // Back Cover Plane
-      const backMesh = new THREE.Mesh(backGeo, coverMaterial);
-      backMesh.position.set(0, 0, -d/2);
-      backMesh.rotation.y = Math.PI; // Face backwards
-      bookGroup.add(backMesh);
-
-      // Pages (Inner block)
-      const pagesGeo = new THREE.BoxGeometry(w - 0.05, h - 0.05, d - 0.02);
-      const pagesMesh = new THREE.Mesh(pagesGeo, pageMaterial);
-      pagesMesh.position.set(0.025, 0, 0);
-      bookGroup.add(pagesMesh);
-
-      // Center and angle the book nicely
-      bookGroup.rotation.y = -Math.PI / 4;
-      scene.add(bookGroup);
+    // Use ResizeObserver for responsive resizing even during CSS transition/animation
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const rw = entry.contentRect.width;
+        const rh = entry.contentRect.height;
+        if (rw > 0 && rh > 0) {
+          camera.aspect = rw / rh;
+          camera.updateProjectionMatrix();
+          renderer.setSize(rw, rh);
+        }
+      }
     });
+    if (mountRef.current) {
+      resizeObserver.observe(mountRef.current);
+    }
 
-    const handleResize = () => {
+    const handleWindowResize = () => {
       if (!mountRef.current) return;
-      camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+      const rw = mountRef.current.clientWidth;
+      const rh = mountRef.current.clientHeight;
+      if (rw > 0 && rh > 0) {
+        camera.aspect = rw / rh;
+        camera.updateProjectionMatrix();
+        renderer.setSize(rw, rh);
+      }
     };
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleWindowResize);
 
     return () => {
       cancelAnimationFrame(animId);
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
       controls.dispose();
       geosRef.current = null;
       materialRef.current = null;
@@ -342,9 +467,34 @@ function BookViewer3D({
       }
       renderer.dispose();
     };
-  }, [coverUrl, bookWidth, bookHeight, spineWidth]);
+  }, [coverUrl, bookWidth, bookHeight, spineWidth, title, author]);
 
-  return <div ref={mountRef} className="w-full h-[520px] cursor-grab active:cursor-grabbing bg-muted/20 rounded-lg border border-border" />;
+  return (
+    <div className="relative w-full h-[520px] rounded-lg overflow-hidden bg-muted/20 border border-border">
+      <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+      
+      {/* Floating interactive instructions pill */}
+      <div className="absolute top-3 left-3 pointer-events-none flex items-center gap-2 bg-background/80 backdrop-blur-md border border-border/80 px-2.5 py-1 rounded-full text-[11px] font-medium text-muted-foreground shadow-xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
+        <span>Drag to rotate • Scroll to zoom</span>
+      </div>
+
+      {/* Floating Cover Status badge */}
+      <div className="absolute top-3 right-3 pointer-events-none flex items-center gap-1.5 bg-background/80 backdrop-blur-md border border-border/80 px-2.5 py-1 rounded-full text-[11px] font-mono text-foreground shadow-xs">
+        {coverUrl ? (
+          <>
+            <span className="text-emerald-400">✓</span>
+            <span className="text-emerald-300 font-semibold">Custom Cover</span>
+          </>
+        ) : (
+          <>
+            <span className="text-amber-400">✦</span>
+            <span className="text-muted-foreground">Default Blueprint Cover</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // --- Main View ---
@@ -472,11 +622,26 @@ export function WriterView() {
   };
 
   const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const inputTarget = e.target;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setCustomCoverUrl(dataUrl);
+        setStage(3);
+      }
+      inputTarget.value = '';
+    };
+    reader.onerror = () => {
+      // Fallback to object URL if FileReader has an issue
       setCustomCoverUrl(URL.createObjectURL(file));
       setStage(3);
-    }
+      inputTarget.value = '';
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -1063,19 +1228,17 @@ export function WriterView() {
             {/* 3D Canvas (Left 8 cols on desktop) */}
             <div className="lg:col-span-8 xl:col-span-9">
               <Panel className="p-0 overflow-hidden relative shadow-lg border-border/80">
-                {customCoverUrl && (
-                  <Suspense fallback={<div className="w-full h-[520px] flex items-center justify-center bg-muted/20"><Loader2 className="w-8 h-8 animate-spin text-gold"/></div>}>
-                    <BookViewer3D 
-                      coverUrl={customCoverUrl} 
-                      spineWidth={spineWidth || activeSpine} 
-                      bookWidth={selectedSize.w} 
-                      bookHeight={selectedSize.h} 
-                      bleedMm={bleedCutMm}
-                      trimBleed={trimBleed}
-                      finish={coverFinish}
-                    />
-                  </Suspense>
-                )}
+                <BookViewer3D 
+                  coverUrl={customCoverUrl} 
+                  spineWidth={spineWidth || activeSpine} 
+                  bookWidth={selectedSize.w} 
+                  bookHeight={selectedSize.h} 
+                  bleedMm={bleedCutMm}
+                  trimBleed={trimBleed}
+                  finish={coverFinish}
+                  title={title}
+                  author={author}
+                />
               </Panel>
             </div>
 
