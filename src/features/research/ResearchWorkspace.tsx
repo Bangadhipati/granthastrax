@@ -590,7 +590,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
               
               <div 
                 ref={previewContainerRef}
-                className="flex-1 overflow-auto overscroll-contain p-4 flex justify-center items-start bg-[#525659] shadow-inner"
+                className="flex-1 overflow-auto overscroll-contain p-6 bg-[#525659] shadow-inner"
                 onWheel={(e) => {
                   if (e.ctrlKey || e.metaKey) {
                     setPreviewZoom((z) => Math.min(Math.max(0.5, z - e.deltaY * 0.001), 3));
@@ -612,16 +612,18 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
                   }
                 }}
               >
-                <PdfViewer
-                  pdfUrl={pdfUrl}
-                  isCompiling={isCompiling}
-                  pageNumber={pageNumber}
-                  numPages={numPages}
-                  previewZoom={previewZoom}
-                  onLoadSuccess={onDocumentLoadSuccess}
-                  compilationError={compilationError}
-                  onRetryCompile={handleCompile}
-                />
+                <div className="min-w-full w-fit flex flex-col items-center">
+                  <PdfViewer
+                    pdfUrl={pdfUrl}
+                    isCompiling={isCompiling}
+                    pageNumber={pageNumber}
+                    numPages={numPages}
+                    previewZoom={previewZoom}
+                    onLoadSuccess={onDocumentLoadSuccess}
+                    compilationError={compilationError}
+                    onRetryCompile={handleCompile}
+                  />
+                </div>
               </div>
             </ResizablePanel>
           </ResizablePanelGroup>

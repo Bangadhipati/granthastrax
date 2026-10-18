@@ -92,24 +92,27 @@ export function PdfViewer({
   }, []);
 
   if (isCompiling && !pdfUrl) {
-    const unscaledWidth = 800;
-    const unscaledHeight = 1131;
-    const scaledWidth = Math.round(unscaledWidth * previewZoom);
-    const scaledHeight = Math.round(unscaledHeight * previewZoom);
+    const a5W = Math.round(560 * previewZoom);
+    const a5H = Math.round(794 * previewZoom);
 
     return (
       <div 
-        className="relative shrink-0 flex justify-center"
-        style={{ width: `${scaledWidth}px`, height: `${scaledHeight}px` }}
+        className="bg-white shadow-2xl rounded-sm flex items-center justify-center border border-border/20 text-muted-foreground select-none shrink-0 transition-all duration-75 animate-pulse"
+        style={{
+          width: `${a5W}px`,
+          height: `${a5H}px`,
+          minWidth: `${a5W}px`,
+          maxWidth: `${a5W}px`,
+          minHeight: `${a5H}px`,
+          maxHeight: `${a5H}px`,
+        }}
       >
         <div 
-          className="flex h-[1131px] w-[800px] items-center justify-center bg-white shadow-xl origin-top-left transition-transform duration-75 animate-pulse"
-          style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top left' }}
+          className="flex flex-col items-center gap-4 text-muted-foreground origin-center"
+          style={{ transform: `scale(${Math.max(0.6, Math.min(1.4, previewZoom))})` }}
         >
-          <div className="flex flex-col items-center gap-4 text-muted-foreground">
-            <Loader2 className="size-8 animate-spin text-gold" />
-            <p className="font-medium text-black">Building Document...</p>
-          </div>
+          <Loader2 className="size-8 animate-spin text-gold" />
+          <p className="font-medium text-black">Building Document...</p>
         </div>
       </div>
     );
@@ -240,37 +243,43 @@ export function PdfViewer({
 
   // Still loading react-pdf
   if (!PdfComponents) {
-    const unscaledWidth = 800;
-    const unscaledHeight = 1131;
-    const scaledWidth = Math.round(unscaledWidth * previewZoom);
-    const scaledHeight = Math.round(unscaledHeight * previewZoom);
-
     if (pdfUrl) {
+      const unscaledWidth = contentSize?.width || 800;
+      const unscaledHeight = contentSize?.height || 1131;
+      const scaledWidth = Math.round(unscaledWidth * previewZoom);
+      const scaledHeight = Math.round(unscaledHeight * previewZoom);
+
       return (
         <div 
           className="relative shrink-0 flex justify-center"
           style={{ width: `${scaledWidth}px`, height: `${scaledHeight}px` }}
         >
           <div 
-            className="flex h-[1131px] w-[800px] items-center justify-center bg-white shadow-xl origin-top-left"
-            style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top left' }}
+            className="flex h-[1131px] w-[800px] items-center justify-center bg-white shadow-xl origin-top"
+            style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top center' }}
           >
             <Loader2 className="size-8 animate-spin text-gold" />
           </div>
         </div>
       );
     }
+
+    const a5W = Math.round(560 * previewZoom);
+    const a5H = Math.round(794 * previewZoom);
+
     return (
       <div 
-        className="relative shrink-0 flex justify-center"
-        style={{ width: `${scaledWidth}px`, height: `${scaledHeight}px` }}
+        className="bg-white shadow-2xl rounded-sm flex flex-col items-center justify-center shrink-0 text-muted-foreground/60 transition-all duration-75 select-none"
+        style={{
+          width: `${a5W}px`,
+          height: `${a5H}px`,
+          minWidth: `${a5W}px`,
+          maxWidth: `${a5W}px`,
+          minHeight: `${a5H}px`,
+          maxHeight: `${a5H}px`,
+        }}
       >
-        <div 
-          className="flex h-[1131px] w-[800px] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground/60 origin-top-left"
-          style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top left' }}
-        >
-          <p>Click "Compile" to generate PDF</p>
-        </div>
+        <p className="text-sm">Click "Compile to PDF" to generate preview</p>
       </div>
     );
   }
@@ -289,6 +298,8 @@ export function PdfViewer({
         style={{
           width: `${scaledWidth}px`,
           height: `${scaledHeight}px`,
+          minWidth: `${scaledWidth}px`,
+          minHeight: `${scaledHeight}px`,
         }}
       >
         {isCompiling && (
@@ -301,11 +312,13 @@ export function PdfViewer({
         )}
         <div
           ref={contentRef}
-          className="transition-transform duration-75 origin-top-left"
+          className="transition-transform duration-75 origin-top shrink-0"
           style={{
             width: `${unscaledWidth}px`,
+            minWidth: `${unscaledWidth}px`,
+            maxWidth: `${unscaledWidth}px`,
             transform: `scale(${previewZoom})`,
-            transformOrigin: 'top left',
+            transformOrigin: 'top center',
           }}
         >
           <Document
@@ -316,14 +329,14 @@ export function PdfViewer({
                 <Loader2 className="size-8 animate-spin text-gold" />
               </div>
             }
-            className="flex flex-col gap-4"
+            className="flex flex-col gap-4 items-center"
           >
             {Array.from(new Array(numPages || 1), (el, index) => (
               <div 
                 key={`page_${index + 1}`} 
                 id={`pdf-page-${index + 1}`}
                 data-page-number={index + 1}
-                className="shadow-xl bg-white"
+                className="shadow-2xl bg-white rounded-sm"
               >
                 <Page
                   pageNumber={index + 1}
@@ -339,22 +352,35 @@ export function PdfViewer({
     );
   }
 
-  const emptyWidth = Math.round(800 * previewZoom);
-  const emptyHeight = Math.round(1131 * previewZoom);
+  // Ready to Compile Placeholder: Standard A5 Paper Sheet (148mm × 210mm)
+  const a5Width = Math.round(560 * previewZoom);
+  const a5Height = Math.round(794 * previewZoom);
 
   return (
     <div 
-      className="relative shrink-0 flex justify-center"
-      style={{ width: `${emptyWidth}px`, height: `${emptyHeight}px` }}
+      className="bg-white shadow-2xl rounded-sm flex flex-col items-center justify-center border border-border/20 text-muted-foreground select-none shrink-0 transition-all duration-75 p-6 overflow-hidden"
+      style={{
+        width: `${a5Width}px`,
+        height: `${a5Height}px`,
+        minWidth: `${a5Width}px`,
+        maxWidth: `${a5Width}px`,
+        minHeight: `${a5Height}px`,
+        maxHeight: `${a5Height}px`,
+      }}
     >
       <div 
-        className="flex h-[1131px] w-[800px] flex-col items-center justify-center bg-white shadow-xl text-muted-foreground origin-top-left transition-transform duration-75"
-        style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top left' }}
+        className="flex flex-col items-center gap-3.5 text-center origin-center transition-transform"
+        style={{ transform: `scale(${Math.max(0.6, Math.min(1.4, previewZoom))})` }}
       >
-        <div className="flex flex-col items-center gap-3 opacity-50">
-          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mb-2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <p className="text-lg font-medium">Ready to Compile</p>
-          <p className="text-sm">Click "Compile to PDF" to generate your document</p>
+        <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4 text-amber-500 mb-1 shadow-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>
+        </div>
+        <p className="text-xl font-semibold text-zinc-900 tracking-tight">Ready to Compile</p>
+        <p className="text-xs text-zinc-500 max-w-[280px] leading-relaxed">
+          Click <span className="font-semibold text-zinc-800">"Compile to PDF"</span> in the toolbar to generate your LaTeX document preview.
+        </p>
+        <div className="mt-4 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-mono text-zinc-600 shadow-sm">
+          A5 Sheet Placeholder
         </div>
       </div>
     </div>
