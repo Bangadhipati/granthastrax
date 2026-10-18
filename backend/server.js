@@ -148,6 +148,7 @@ app.put('/api/projects/:id', requireAuth, async (req, res) => {
     if (content !== undefined) project.content = content;
     if (editorState !== undefined) project.editorState = editorState;
     if (req.body.compiler !== undefined) project.compiler = req.body.compiler;
+    if (req.body.files !== undefined) project.files = req.body.files;
     
     project.lastEditedBy = req.userName;
     
@@ -287,6 +288,107 @@ app.delete('/api/projects/:id/images/:imageId', requireAuth, async (req, res) =>
   }
 });
 
+// --- File Tree Management Routes ---
+
+// Add file(s) to project (single or batch multiple)
+app.post('/api/projects/:id/files', requireAuth, async (req, res) => {
+  try {
+    const project = await Project.findOne({ 
+      _id: req.params.id,
+      $or: [{ userId: req.userId }, { collaboratorIdentifiers: { $in: req.userIdentifiers } }]
+    });
+
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const newFiles = Array.isArray(req.body)
+      ? req.body
+      : (req.body.files && Array.isArray(req.body.files))
+        ? req.body.files
+        : [req.body];
+
+    const validFiles = newFiles.filter(f => f && f.name && typeof f.name === 'string');
+    if (validFiles.length === 0) {
+      return res.status(400).json({ error: 'Valid file name required' });
+    }
+
+    if (!project.files) project.files = [];
+
+    for (const f of validFiles) {
+      const cleanName = path.basename(f.name.trim());
+      if (!cleanName || cleanName === 'main.tex') continue;
+
+      const existing = project.files.find(item => item.name.toLowerCase() === cleanName.toLowerCase());
+      if (existing) {
+        if (f.content !== undefined) existing.content = f.content;
+      } else {
+        project.files.push({
+          name: cleanName,
+          content: f.content !== undefined ? f.content : ''
+        });
+      }
+    }
+
+    project.lastEditedBy = req.userName;
+    await project.save();
+    res.json(project);
+  } catch (error) {
+    console.error('Failed to add file(s):', error);
+    res.status(500).json({ error: 'Failed to add file(s)' });
+  }
+});
+
+// Update a file's name or content
+app.put('/api/projects/:id/files/:fileId', requireAuth, async (req, res) => {
+  try {
+    const { name, content } = req.body;
+    const project = await Project.findOne({ 
+      _id: req.params.id,
+      $or: [{ userId: req.userId }, { collaboratorIdentifiers: { $in: req.userIdentifiers } }]
+    });
+
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const file = project.files.id(req.params.fileId);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+
+    if (name) {
+      const cleanName = path.basename(name.trim());
+      if (cleanName && cleanName !== 'main.tex') {
+        file.name = cleanName;
+      }
+    }
+    if (content !== undefined) {
+      file.content = content;
+    }
+
+    project.lastEditedBy = req.userName;
+    await project.save();
+    res.json(project);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update file' });
+  }
+});
+
+// Delete a file
+app.delete('/api/projects/:id/files/:fileId', requireAuth, async (req, res) => {
+  try {
+    const project = await Project.findOne({ 
+      _id: req.params.id,
+      $or: [{ userId: req.userId }, { collaboratorIdentifiers: { $in: req.userIdentifiers } }]
+    });
+
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    project.files.pull({ _id: req.params.fileId });
+    project.lastEditedBy = req.userName;
+    
+    await project.save();
+    res.json(project);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete file' });
+  }
+});
+
 // Compile LaTeX to PDF locally using child_process
 app.post('/api/compile', requireAuth, async (req, res) => {
   const os = require('os');
@@ -296,13 +398,27 @@ app.post('/api/compile', requireAuth, async (req, res) => {
 
   let tmpDir;
   try {
-    let { content, engine = 'pdflatex', images = [] } = req.body;
+    let { content, engine = 'pdflatex', images = [], files = [] } = req.body;
     if (!content) {
       return res.status(400).json({ error: 'LaTeX content is required' });
     }
 
     tmpDir = path.join(os.tmpdir(), 'latex_' + crypto.randomUUID());
     fs.mkdirSync(tmpDir, { recursive: true });
+
+    // Write auxiliary project files (.bib, .tex, .sty, etc.)
+    if (Array.isArray(files) && files.length > 0) {
+      for (const f of files) {
+        if (f && f.name) {
+          const safeRelative = f.name.replace(/^(\.\.[\/\\])+/, '').trim();
+          if (safeRelative && safeRelative !== 'document.tex') {
+            const fullDest = path.join(tmpDir, safeRelative);
+            fs.mkdirSync(path.dirname(fullDest), { recursive: true });
+            fs.writeFileSync(fullDest, f.content || '', 'utf8');
+          }
+        }
+      }
+    }
 
     // Auto-fix common syntax errors from frontend editors
     content = content.replace(/\\usepackage\s*(?:\[[^\]]*\])?\s*\{\s*\}/g, ''); // empty {}
@@ -410,6 +526,16 @@ app.post('/api/compile', requireAuth, async (req, res) => {
         });
       } else {
         execSync(`${activeEngine} -interaction=nonstopmode -halt-on-error document.tex`, { cwd: tmpDir, stdio: 'pipe' });
+        // If bibtex exists and bib files exist, execute bibtex
+        try {
+          const hasBib = Array.isArray(files) && files.some(f => f && f.name && f.name.endsWith('.bib'));
+          if (hasBib && commandExists('bibtex')) {
+            execSync(`bibtex document`, { cwd: tmpDir, stdio: 'pipe' });
+            execSync(`${activeEngine} -interaction=nonstopmode -halt-on-error document.tex`, { cwd: tmpDir, stdio: 'pipe' });
+          }
+        } catch (bErr) {
+          console.warn("BibTeX step notice:", bErr.message);
+        }
         // Run second pass to resolve cross-references and citations
         execSync(`${activeEngine} -interaction=nonstopmode -halt-on-error document.tex`, { cwd: tmpDir, stdio: 'pipe' });
       }
@@ -478,12 +604,24 @@ app.post('/api/compile', requireAuth, async (req, res) => {
 // --- Project Source Export (ZIP) Route ---
 app.post('/api/compile/export', requireAuth, async (req, res) => {
   try {
-    const { content, images = [], pdfBase64, filename = 'project_source.zip', pdfFilename } = req.body;
+    const { content, images = [], pdfBase64, filename = 'project_source.zip', pdfFilename, files = [] } = req.body;
     const AdmZip = require('adm-zip');
     const zip = new AdmZip();
 
     // 1. Add main.tex
     zip.addFile('main.tex', Buffer.from(content || '', 'utf8'));
+
+    // 2. Add auxiliary files (.bib, other .tex, .sty, etc.)
+    if (Array.isArray(files) && files.length > 0) {
+      for (const f of files) {
+        if (f && f.name && f.name !== 'main.tex') {
+          const safeRelative = f.name.replace(/^(\.\.[\/\\])+/, '').trim();
+          if (safeRelative) {
+            zip.addFile(safeRelative, Buffer.from(f.content || '', 'utf8'));
+          }
+        }
+      }
+    }
 
     // 2. Add compiled PDF if present
     if (pdfBase64 && typeof pdfBase64 === 'string') {

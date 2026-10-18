@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { EditorShell } from "@/components/layout/EditorShell";
-import { ResearchSidebar, type ProjectImage } from "./ResearchSidebar";
+import { ResearchSidebar, type ProjectImage, type ProjectFile } from "./ResearchSidebar";
 import { PdfViewer, type CompilationErrorInfo } from "./PdfViewer";
 import { ShareModal } from "./ShareModal";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,7 +10,8 @@ import { getProjectPdf, saveProjectPdf, removeProjectPdf } from "@/lib/pdfCache"
 import { cn } from "@/lib/utils";
 import { 
   Loader2, Play, ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
-  ArrowLeft, Download, FileText, ImageIcon, ExternalLink, Copy, Check, X, Plus
+  ArrowLeft, Download, FileText, ImageIcon, ExternalLink, Copy, Check, X, Plus,
+  BookOpen, FileCode
 } from "lucide-react";
 import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
@@ -93,25 +94,72 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
   const [activeFile, setActiveFile] = useState<
-    { type: 'main' } | { type: 'image'; image: ProjectImage }
+    | { type: 'main' }
+    | { type: 'file'; fileId: string; fileName: string }
+    | { type: 'image'; image: ProjectImage }
   >({ type: 'main' });
+  const [auxFileContents, setAuxFileContents] = useState<Record<string, string>>({});
   const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [imageCopied, setImageCopied] = useState(false);
 
-  // If the active image was deleted from the project, return to main.tex
+  // If the active auxiliary file or image was deleted from the project, return to main.tex
   useEffect(() => {
     if (activeFile.type === 'image') {
       const exists = project?.images?.some((img: ProjectImage) => img._id === activeFile.image._id);
       if (project && !exists) {
         setActiveFile({ type: 'main' });
       }
+    } else if (activeFile.type === 'file') {
+      const exists = project?.files?.some((f: any) => f._id === activeFile.fileId);
+      if (project && !exists) {
+        setActiveFile({ type: 'main' });
+      }
     }
-  }, [project?.images, activeFile]);
+  }, [project?.images, project?.files, activeFile]);
+
+  // Mutation to save auxiliary file content
+  const updateFileMutation = useMutation({
+    mutationFn: async ({ fileId, content }: { fileId: string; content: string }) => {
+      const res = await api.put(`/api/projects/${projectId}/files/${fileId}`, { content });
+      return res.data;
+    },
+    onMutate: () => setIsSaving(true),
+    onSuccess: (updatedProject) => {
+      setIsSaving(false);
+      setLastSaved(new Date());
+      queryClient.setQueryData(['project', projectId], updatedProject);
+    },
+    onError: () => setIsSaving(false),
+  });
+
+  // Debounced Autosave for active auxiliary file
+  const activeAuxFileId = activeFile.type === 'file' ? activeFile.fileId : null;
+  const activeAuxContent = activeAuxFileId !== null ? (auxFileContents[activeAuxFileId] ?? "") : "";
+
+  useEffect(() => {
+    if (!project || !activeAuxFileId) return;
+    const originalFile = project?.files?.find((f: any) => f._id === activeAuxFileId);
+    if (!originalFile) return;
+    const originalContent = originalFile.content || "";
+    if (activeAuxContent === originalContent) return;
+
+    const timeout = setTimeout(() => {
+      updateFileMutation.mutate({ fileId: activeAuxFileId, content: activeAuxContent });
+    }, 1500);
+    return () => clearTimeout(timeout);
+  }, [activeAuxContent, activeAuxFileId, project?.files, updateFileMutation.mutate]);
 
   const handleSelectImage = (image: ProjectImage) => {
     setImageNaturalSize(null);
     setImageCopied(false);
     setActiveFile({ type: 'image', image });
+  };
+
+  const handleSelectFile = (file: ProjectFile) => {
+    setActiveFile({ type: 'file', fileId: file._id, fileName: file.name });
+    if (auxFileContents[file._id] === undefined) {
+      setAuxFileContents(prev => ({ ...prev, [file._id]: file.content || '' }));
+    }
   };
 
   const handleSelectMain = () => {
@@ -175,7 +223,11 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
       const res = await api.post("/api/compile", { 
         content: latexContent,
         engine: project?.compiler || 'tectonic',
-        images: project?.images || []
+        images: project?.images || [],
+        files: (project?.files || []).map((f: any) => ({
+          name: f.name,
+          content: auxFileContents[f._id] !== undefined ? auxFileContents[f._id] : (f.content || '')
+        }))
       }, { responseType: 'blob' });
       
       const blob = res.data;
@@ -292,6 +344,10 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
       const res = await api.post("/api/compile/export", { 
         content: latexContent,
         images: project?.images || [],
+        files: (project?.files || []).map((f: any) => ({
+          name: f.name,
+          content: auxFileContents[f._id] !== undefined ? auxFileContents[f._id] : (f.content || '')
+        })),
         pdfBase64,
         filename,
         pdfFilename
@@ -351,9 +407,16 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
         latexContent={latexContent}
         onCompilerChange={(compiler) => saveMutation.mutate({ compiler })}
         onInsertImage={(url, name) => insertTextAtCursor(`\\includegraphics{${name}}\n`)}
-        activeView={activeFile.type === 'main' ? { type: 'main' } : { type: 'image', imageId: activeFile.image._id }}
+        activeView={
+          activeFile.type === 'main' 
+            ? { type: 'main' } 
+            : activeFile.type === 'file'
+              ? { type: 'file', fileId: activeFile.fileId }
+              : { type: 'image', imageId: activeFile.image._id }
+        }
         onSelectMain={handleSelectMain}
         onSelectImage={handleSelectImage}
+        onSelectFile={handleSelectFile}
       />
 
       {/* Main Workspace Area */}
@@ -428,6 +491,30 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
                     <span>main.tex</span>
                   </button>
 
+                  {/* Auxiliary File Tab */}
+                  {activeFile.type === 'file' && (
+                    <div
+                      className="flex items-center gap-2 rounded px-2.5 py-1 text-xs font-medium bg-secondary text-gold border border-gold/40 shadow-sm animate-in fade-in zoom-in-95 duration-150"
+                    >
+                      {activeFile.fileName.endsWith('.bib') ? (
+                        <BookOpen className="size-3.5 text-amber-400" />
+                      ) : activeFile.fileName.endsWith('.sty') || activeFile.fileName.endsWith('.cls') ? (
+                        <FileCode className="size-3.5 text-blue-400" />
+                      ) : (
+                        <FileText className="size-3.5 text-emerald-400" />
+                      )}
+                      <span className="max-w-[140px] truncate" title={activeFile.fileName}>{activeFile.fileName}</span>
+                      <button
+                        type="button"
+                        onClick={handleSelectMain}
+                        className="p-0.5 rounded hover:bg-background/80 text-muted-foreground hover:text-foreground transition-colors"
+                        title="Close file and return to main.tex"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  )}
+
                   {/* Selected Image Tab */}
                   {activeFile.type === 'image' && (
                     <div
@@ -451,6 +538,10 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
                   <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground px-2">
                     LaTeX Editor
                   </span>
+                ) : activeFile.type === 'file' ? (
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-gold px-2">
+                    {activeFile.fileName.endsWith('.bib') ? 'BibTeX References' : 'Subfile Editor'}
+                  </span>
                 ) : (
                   <button
                     type="button"
@@ -464,7 +555,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
               </div>
 
               {/* Active Content: CodeMirror Editor or Image Preview */}
-              {activeFile.type === 'main' ? (
+              {activeFile.type !== 'image' ? (
                 <div 
                   className="flex-1 overflow-hidden relative"
                   onWheel={(e) => {
@@ -475,10 +566,20 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
                 >
                   <CodeMirror
                     ref={editorRef}
-                    value={latexContent}
+                    value={
+                      activeFile.type === 'main'
+                        ? latexContent
+                        : (auxFileContents[activeFile.fileId] ?? project?.files?.find((f: any) => f._id === activeFile.fileId)?.content ?? "")
+                    }
                     theme="dark"
                     height="100%"
-                    onChange={(val) => setLatexContent(val)}
+                    onChange={(val) => {
+                      if (activeFile.type === 'main') {
+                        setLatexContent(val);
+                      } else if (activeFile.type === 'file') {
+                        setAuxFileContents(prev => ({ ...prev, [activeFile.fileId]: val }));
+                      }
+                    }}
                     className="h-full w-full border-none bg-transparent font-mono outline-none"
                     extensions={[EditorView.theme({ "&": { fontSize: `${13 * latexZoom}px` } })]}
                     basicSetup={{

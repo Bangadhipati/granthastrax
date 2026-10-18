@@ -34,6 +34,10 @@ const ProjectSchema = new mongoose.Schema({
     name: String,
     url: String,
     publicId: String
+  }],
+  files: [{
+    name: { type: String, required: true },
+    content: { type: String, default: '' }
   }]
 }, { timestamps: true });
 
