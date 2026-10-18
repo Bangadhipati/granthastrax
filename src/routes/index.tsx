@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { HomeView } from "@/features/home/HomeView";
+import { HomePageSkeleton } from "@/components/ui/page-skeletons";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -18,5 +19,6 @@ export const Route = createFileRoute("/")({
       },
     ],
   }),
+  pendingComponent: HomePageSkeleton,
   component: HomeView,
 });

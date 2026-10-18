@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { WriterView } from "@/features/writer/WriterView";
+import { WriterDeskSkeleton } from "@/components/ui/page-skeletons";
 
 export const Route = createFileRoute("/writer")({
   head: () => ({
@@ -17,5 +18,6 @@ export const Route = createFileRoute("/writer")({
       },
     ],
   }),
+  pendingComponent: WriterDeskSkeleton,
   component: WriterView,
 });

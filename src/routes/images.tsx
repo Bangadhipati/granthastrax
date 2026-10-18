@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ImageStudioView } from "@/features/image-studio/ImageStudioView";
+import { ImageStudioSkeleton } from "@/components/ui/page-skeletons";
 
 export const Route = createFileRoute("/images")({
   head: () => ({
@@ -17,5 +18,6 @@ export const Route = createFileRoute("/images")({
       },
     ],
   }),
+  pendingComponent: ImageStudioSkeleton,
   component: ImageStudioView,
 });

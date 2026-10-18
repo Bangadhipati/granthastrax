@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Plus, Loader2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 
 
@@ -116,7 +117,41 @@ export function ResearchView() {
             <p className="mt-2 text-sm text-muted-foreground">You must be logged in to create and save projects.</p>
           </div>
         ) : isLoading ? (
-          <div className="flex justify-center p-8"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
+          <div className="overflow-x-auto rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Project</TableHead>
+                  <TableHead>Updated</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[1, 2, 3, 4].map((i) => (
+                  <TableRow key={i} className="hover:bg-transparent">
+                    <TableCell className="py-4">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="size-8 rounded-lg" variant="gold" />
+                        <div className="flex flex-col gap-1.5">
+                          <Skeleton className="h-4 w-48 sm:w-72 rounded" />
+                          <Skeleton className="h-3 w-32 rounded" variant="subtle" />
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <Skeleton className="h-3.5 w-24 rounded" variant="subtle" />
+                    </TableCell>
+                    <TableCell className="py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Skeleton className="h-8 w-16 rounded-md" variant="subtle" />
+                        <Skeleton className="size-8 rounded-md" variant="subtle" />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border/50 bg-background/50 backdrop-blur-sm">
             <Table>

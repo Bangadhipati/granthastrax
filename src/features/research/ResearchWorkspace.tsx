@@ -20,6 +20,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { ResearchWorkspaceSkeleton } from "@/components/ui/page-skeletons";
 
 export function ResearchWorkspace({ projectId }: { projectId: string }) {
   const [latexContent, setLatexContent] = useState("");
@@ -30,7 +31,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
 
   const [isInitialized, setIsInitialized] = useState(false);
   
-  const { data: project } = useQuery({
+  const { data: project, isLoading: isProjectLoading } = useQuery({
     queryKey: ['project', projectId],
     queryFn: async () => {
       const res = await api.get(`/api/projects/${projectId}`);
@@ -397,6 +398,10 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
+  }
+
+  if (isProjectLoading && !project) {
+    return <ResearchWorkspaceSkeleton />;
   }
 
   return (

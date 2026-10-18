@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ResearchView } from "@/features/research/ResearchView";
+import { ResearchDeskSkeleton } from "@/components/ui/page-skeletons";
 
 export const Route = createFileRoute("/research/")({
   head: () => ({
@@ -17,5 +18,6 @@ export const Route = createFileRoute("/research/")({
       },
     ],
   }),
+  pendingComponent: ResearchDeskSkeleton,
   component: ResearchView,
 });
