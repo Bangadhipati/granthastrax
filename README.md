@@ -1,6 +1,6 @@
 # GranthAstraX ⚡
 
-
+<img width="2864" height="1536" alt="image" src="https://github.com/user-attachments/assets/34e4dcc5-7b63-4190-ad51-807c5c83e51d" />
 
 <div align="center">
 
@@ -21,7 +21,7 @@
 
 ---
 
-### [🌐 Launch GranthAstraX Studio](https://granthastrax.netlify.app/) • [📡 Backend Status](https://granthastrax.onrender.com/health) • [📖 Documentation](#table-of-contents)
+### [🌐 Launch GranthAstraX Studio](https://granthastrax.netlify.app/) • [📡 Backend Status](https://granthastrax.onrender.com/health)
 
 </div>
 
@@ -29,7 +29,7 @@
 
 ## 🌟 Overview
 
-**GranthAstraX** (ग्रंथास्त्र) is an all-in-one desktop-class publishing engineering platform built for researchers, authors, publishers, and developers. It merges the visual intuitiveness of modern WYSIWYG editors with the mathematical rigor of LaTeX typesetting, vector template generation, GS1 Bookland barcode encoding, and photorealistic 3D book cover simulation.
+**GranthAstraX** is an all-in-one desktop-class publishing engineering platform built for researchers, authors, publishers, and developers. It merges the visual intuitiveness of modern WYSIWYG editors with the mathematical rigor of LaTeX typesetting, vector template generation, GS1 Bookland barcode encoding, and photorealistic 3D book cover simulation.
 
 Whether you are authoring a peer-reviewed research paper, preparing a camera-ready book cover for Amazon KDP or IngramSpark, converting legacy DOCX files to clean PDF/Markdown, or optimizing media assets, GranthAstraX provides a streamlined, zero-friction workstation.
 
@@ -107,16 +107,23 @@ A media engineering utility powered by Libvips:
 
 ### 1. Studio Hub & Landing Platform
 
+<img width="2816" height="1196" alt="image" src="https://github.com/user-attachments/assets/24062333-b232-422f-8228-dd3e387c8ab0" />
 
 <br/>
 
 ### 2. Research Studio (Overleaf-Grade LaTeX Workspace)
 
+<img width="2864" height="1536" alt="image" src="https://github.com/user-attachments/assets/f1c3e1c1-23f2-4293-863b-8676728d7ce0" />
+
+<br/>
+
+<img width="2864" height="1536" alt="image" src="https://github.com/user-attachments/assets/56635b3c-6121-44fc-81de-72a6dd4c3d63" />
 
 <br/>
 
 ### 3. Writer Desk (Interactive 3D Book Mockup & Lamination)
 
+<img width="2864" height="1536" alt="image" src="https://github.com/user-attachments/assets/7f51abf7-b476-44fa-9029-171d0f9f54b0" />
 
 <br/>
 
@@ -127,11 +134,13 @@ A media engineering utility powered by Libvips:
 
 ### 5. Document Studio (Universal Document Conversion)
 
+<img width="2864" height="1536" alt="image" src="https://github.com/user-attachments/assets/a29f84db-0038-41eb-aa3e-29190d8fc58c" />
 
 <br/>
 
 ### 6. Image Studio (Vectorization & Transcoding)
 
+<img width="2864" height="1536" alt="image" src="https://github.com/user-attachments/assets/8c544daa-9573-49d6-9e01-a2d69b8ece45" />
 
 </div>
 
