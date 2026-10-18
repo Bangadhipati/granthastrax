@@ -65,6 +65,28 @@ export const formatDim = (mm: number, unit: MeasurementUnit, withUnit = true): s
   return withUnit ? `${val}${suffix}` : val;
 };
 
+// Helper to set UV mapping directly on a PlaneGeometry
+function setPlaneUVs(
+  geo: THREE.PlaneGeometry,
+  uMin: number,
+  uMax: number,
+  vMin: number,
+  vMax: number
+) {
+  const uv = geo.attributes.uv;
+  if (!uv) return;
+  // PlaneGeometry vertices:
+  // 0: top-left (-w/2, +h/2) -> (uMin, vMax)
+  // 1: top-right (+w/2, +h/2) -> (uMax, vMax)
+  // 2: bottom-left (-w/2, -h/2) -> (uMin, vMin)
+  // 3: bottom-right (+w/2, -h/2) -> (uMax, vMin)
+  uv.setXY(0, uMin, vMax);
+  uv.setXY(1, uMax, vMax);
+  uv.setXY(2, uMin, vMin);
+  uv.setXY(3, uMax, vMin);
+  uv.needsUpdate = true;
+}
+
 // --- 3D Book Viewer Component ---
 function BookViewer3D({ 
   coverUrl, 
@@ -82,11 +104,78 @@ function BookViewer3D({
   trimBleed?: boolean;
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
+  const geosRef = useRef<{
+    front: THREE.PlaneGeometry;
+    spine: THREE.PlaneGeometry;
+    back: THREE.PlaneGeometry;
+    imageAspect: number;
+  } | null>(null);
 
+  // Apply UV mapping based on trimBleed and bleedMm
+  const updateUVs = (
+    imageAspect: number,
+    geos: { front: THREE.PlaneGeometry; spine: THREE.PlaneGeometry; back: THREE.PlaneGeometry }
+  ) => {
+    const isFullWrap = imageAspect >= 1.2;
+    const templateBleedMm = 3;
+    const totalTemplateW = (bookWidth * 2) + spineWidth + (templateBleedMm * 2);
+    const totalTemplateH = bookHeight + (templateBleedMm * 2);
+
+    if (isFullWrap) {
+      if (trimBleed && bleedMm > 0) {
+        // When trimBleed is ON, chop off the outer bleed/slug margin
+        const uCut = bleedMm / totalTemplateW;
+        const vCut = bleedMm / totalTemplateH;
+
+        const uBackMin = Math.max(0, uCut);
+        const uBackMax = (templateBleedMm + bookWidth) / totalTemplateW;
+
+        const uSpineMin = uBackMax;
+        const uSpineMax = (templateBleedMm + bookWidth + spineWidth) / totalTemplateW;
+
+        const uFrontMin = uSpineMax;
+        const uFrontMax = Math.min(1.0, 1.0 - uCut);
+
+        const vMin = Math.max(0, vCut);
+        const vMax = Math.min(1.0, 1.0 - vCut);
+
+        setPlaneUVs(geos.front, uFrontMin, uFrontMax, vMin, vMax);
+        setPlaneUVs(geos.spine, uSpineMin, uSpineMax, vMin, vMax);
+        setPlaneUVs(geos.back, uBackMin, uBackMax, vMin, vMax);
+      } else {
+        // When trimBleed is OFF, show the FULL UN-CHOPPED image edge-to-edge (including outer bleed guides/margins)
+        const uBackMax = (templateBleedMm + bookWidth) / totalTemplateW;
+        const uSpineMax = (templateBleedMm + bookWidth + spineWidth) / totalTemplateW;
+
+        setPlaneUVs(geos.front, uSpineMax, 1.0, 0.0, 1.0);
+        setPlaneUVs(geos.spine, uBackMax, uSpineMax, 0.0, 1.0);
+        setPlaneUVs(geos.back, 0.0, uBackMax, 0.0, 1.0);
+      }
+    } else {
+      // Single portrait front cover
+      if (trimBleed && bleedMm > 0) {
+        const uCut = bleedMm / bookWidth;
+        const vCut = bleedMm / bookHeight;
+        setPlaneUVs(geos.front, uCut, 1.0 - uCut, vCut, 1.0 - vCut);
+      } else {
+        setPlaneUVs(geos.front, 0.0, 1.0, 0.0, 1.0);
+      }
+      setPlaneUVs(geos.spine, 0.0, 1.0, 0.0, 1.0);
+      setPlaneUVs(geos.back, 0.0, 1.0, 0.0, 1.0);
+    }
+  };
+
+  // Re-apply UVs immediately whenever trimBleed or bleedMm change without rebuilding the 3D scene
+  useEffect(() => {
+    if (geosRef.current) {
+      updateUVs(geosRef.current.imageAspect, geosRef.current);
+    }
+  }, [trimBleed, bleedMm, bookWidth, bookHeight, spineWidth]);
+
+  // Main 3D scene setup
   useEffect(() => {
     if (!mountRef.current || !coverUrl) return;
 
-    // Dimensions scaled down for 3D viewing (e.g. mm to units)
     const scale = 0.02;
     const w = bookWidth * scale;
     const h = bookHeight * scale;
@@ -108,7 +197,7 @@ function BookViewer3D({
     controls.maxDistance = 15;
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
     scene.add(ambientLight);
     
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
@@ -120,79 +209,70 @@ function BookViewer3D({
     fillLight.position.set(-5, 0, -5);
     scene.add(fillLight);
 
+    let animId: number;
+
     // Load Texture
     const textureLoader = new THREE.TextureLoader();
     textureLoader.load(coverUrl, (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
       
-      // Calculate UV mapping based on cover layout: [Back | Spine | Front]
-      // When trimBleed is enabled, chop off the outer template bleed margins (standard 3mm on all 4 sides)
-      const effectiveBleed = trimBleed ? Math.max(0, bleedMm) : 0;
-      const fullTemplateW = (bookWidth * 2) + spineWidth + (effectiveBleed * 2);
-      const fullTemplateH = bookHeight + (effectiveBleed * 2);
+      const imageAspect = (texture.image && texture.image.width && texture.image.height) 
+        ? texture.image.width / texture.image.height 
+        : 1.5;
 
-      const uBleed = effectiveBleed / fullTemplateW;
-      const uBack = bookWidth / fullTemplateW;
-      const uSpine = spineWidth / fullTemplateW;
-      const uFront = bookWidth / fullTemplateW;
-
-      const vBleed = effectiveBleed / fullTemplateH;
-      const vTrim = bookHeight / fullTemplateH;
-
-      // Slice the texture for each part, starting inside the chopped outer bleed
-      const backTexture = texture.clone();
-      backTexture.repeat.set(uBack, vTrim);
-      backTexture.offset.set(uBleed, vBleed);
-
-      const spineTexture = texture.clone();
-      spineTexture.repeat.set(uSpine, vTrim);
-      spineTexture.offset.set(uBleed + uBack, vBleed);
-
-      const frontTexture = texture.clone();
-      frontTexture.repeat.set(uFront, vTrim);
-      frontTexture.offset.set(uBleed + uBack + uSpine, vBleed);
-
+      const coverMaterial = new THREE.MeshStandardMaterial({ 
+        map: texture, 
+        roughness: 0.35,
+        metalness: 0.05
+      });
       const pageMaterial = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.8 });
-      
-      const frontMaterial = new THREE.MeshStandardMaterial({ map: frontTexture, roughness: 0.4 });
-      const spineMaterial = new THREE.MeshStandardMaterial({ map: spineTexture, roughness: 0.4 });
-      const backMaterial = new THREE.MeshStandardMaterial({ map: backTexture, roughness: 0.4 });
+
+      const frontGeo = new THREE.PlaneGeometry(w, h);
+      const spineGeo = new THREE.PlaneGeometry(d, h);
+      const backGeo = new THREE.PlaneGeometry(w, h);
+
+      geosRef.current = {
+        front: frontGeo,
+        spine: spineGeo,
+        back: backGeo,
+        imageAspect
+      };
+
+      // Set initial UVs
+      updateUVs(imageAspect, geosRef.current);
 
       const bookGroup = new THREE.Group();
 
       // Front Cover Plane
-      const frontGeo = new THREE.PlaneGeometry(w, h);
-      const frontMesh = new THREE.Mesh(frontGeo, frontMaterial);
+      const frontMesh = new THREE.Mesh(frontGeo, coverMaterial);
       frontMesh.position.set(0, 0, d/2);
       bookGroup.add(frontMesh);
 
       // Spine Plane
-      const spineGeo = new THREE.PlaneGeometry(d, h);
-      const spineMesh = new THREE.Mesh(spineGeo, spineMaterial);
+      const spineMesh = new THREE.Mesh(spineGeo, coverMaterial);
       spineMesh.position.set(-w/2, 0, 0);
       spineMesh.rotation.y = -Math.PI / 2;
       bookGroup.add(spineMesh);
 
       // Back Cover Plane
-      const backGeo = new THREE.PlaneGeometry(w, h);
-      const backMesh = new THREE.Mesh(backGeo, backMaterial);
+      const backMesh = new THREE.Mesh(backGeo, coverMaterial);
       backMesh.position.set(0, 0, -d/2);
       backMesh.rotation.y = Math.PI; // Face backwards
       bookGroup.add(backMesh);
 
-      // Pages (Inner block) to give thickness to the book
+      // Pages (Inner block)
       const pagesGeo = new THREE.BoxGeometry(w - 0.05, h - 0.05, d - 0.02);
       const pagesMesh = new THREE.Mesh(pagesGeo, pageMaterial);
       pagesMesh.position.set(0.025, 0, 0);
       bookGroup.add(pagesMesh);
 
-      // Center the group
+      // Center and angle the book nicely
       bookGroup.rotation.y = -Math.PI / 4;
       scene.add(bookGroup);
 
       // Animation Loop
       const animate = () => {
-        requestAnimationFrame(animate);
+        animId = requestAnimationFrame(animate);
         controls.update();
         renderer.render(scene, camera);
       };
@@ -208,13 +288,16 @@ function BookViewer3D({
     window.addEventListener('resize', handleResize);
 
     return () => {
+      cancelAnimationFrame(animId);
       window.removeEventListener('resize', handleResize);
+      controls.dispose();
+      geosRef.current = null;
       if (mountRef.current && renderer.domElement.parentNode === mountRef.current) {
         mountRef.current.removeChild(renderer.domElement);
       }
       renderer.dispose();
     };
-  }, [coverUrl, spineWidth, bookWidth, bookHeight, bleedMm, trimBleed]);
+  }, [coverUrl, bookWidth, bookHeight, spineWidth]);
 
   return <div ref={mountRef} className="w-full h-[520px] cursor-grab active:cursor-grabbing bg-muted/20 rounded-lg border border-border" />;
 }
@@ -939,10 +1022,14 @@ export function WriterView() {
                     <RefreshCw className="w-3.5 h-3.5 text-gold"/> Interactive 3D Mockup
                   </p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">Left-click drag to rotate • Scroll to zoom</p>
-                  {trimBleed && (
+                  {trimBleed ? (
                     <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full w-fit">
                       <Scissors className="size-3" />
-                      <span>Outer bleed trimmed ({formatDim(bleedCutMm, unit)} chopped)</span>
+                      <span>Outer bleed chopped ({formatDim(bleedCutMm, unit)} trimmed)</span>
+                    </div>
+                  ) : (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full w-fit">
+                      <span>Raw un-trimmed view (0 {unit} chopped — outer margins shown)</span>
                     </div>
                   )}
                 </div>
@@ -1002,7 +1089,7 @@ export function WriterView() {
                 </div>
 
                 {/* Template Bleed Trimming (Chopping) Control */}
-                <div className="p-3 rounded-lg border border-border bg-card/60 space-y-2">
+                <div className="p-3.5 rounded-lg border border-border bg-card/60 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                       <Scissors className="size-3.5 text-gold" />
@@ -1011,40 +1098,61 @@ export function WriterView() {
                     <button
                       type="button"
                       onClick={() => setTrimBleed(!trimBleed)}
-                      className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
-                        trimBleed ? 'bg-gold' : 'bg-muted'
+                      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+                        trimBleed ? 'bg-gold' : 'bg-muted border border-border'
                       }`}
-                      title={trimBleed ? "Bleed trimming active" : "Raw un-trimmed image"}
+                      title={trimBleed ? "Bleed trimming active — click to turn OFF" : "Raw un-trimmed image — click to turn ON"}
                     >
-                      <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
-                        trimBleed ? 'translate-x-3.5' : 'translate-x-0.5'
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                        trimBleed ? 'translate-x-4' : 'translate-x-1'
                       }`} />
                     </button>
                   </div>
                   
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
                     {trimBleed 
-                      ? "Cuts off the extra template bleed margin & outer guide marks so only the clean trimmed cover wraps the book."
-                      : "Displaying full un-cropped upload including outer margins."}
+                      ? "Trims the outer bleed, guide marks, and margins so only the pristine book cover wraps the 3D model."
+                      : "Showing the full raw un-trimmed upload edge-to-edge (including outer bleed guidelines & margins)."}
                   </p>
 
                   {trimBleed && (
-                    <div className="pt-1 flex items-center justify-between">
-                      <span className="text-[11px] text-muted-foreground">Chop depth:</span>
-                      <div className="flex items-center gap-1">
+                    <div className="pt-2 space-y-2 border-t border-border/50">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[11px] text-muted-foreground font-medium">Cut Depth:</span>
+                        <span className="font-mono font-semibold text-gold text-[11px]">
+                          {formatDim(bleedCutMm, unit)} ({unit === 'in' ? `${bleedCutMm.toFixed(1)} mm` : `${(bleedCutMm / 25.4).toFixed(2)} in`})
+                        </span>
+                      </div>
+
+                      {/* Dynamic Range Slider for instant real-time visual trimming */}
+                      <input
+                        type="range"
+                        min="1"
+                        max="20"
+                        step="0.5"
+                        value={bleedCutMm}
+                        onChange={(e) => setBleedCutMm(parseFloat(e.target.value))}
+                        className="w-full accent-gold h-1.5 bg-secondary rounded-lg cursor-pointer"
+                        title="Drag to dynamically adjust outer bleed cut depth"
+                      />
+
+                      {/* Quick Presets */}
+                      <div className="grid grid-cols-4 gap-1 pt-0.5">
                         {[
-                          { label: `${formatDim(3, unit)} (Std)`, val: 3 },
-                          { label: `${formatDim(5, unit)} (Wrap)`, val: 5 },
-                          { label: `0 ${unit}`, val: 0 }
+                          { label: `3 mm`, val: 3, tip: "Standard Blueprint Bleed" },
+                          { label: `6 mm`, val: 6, tip: "Wide / Safe Margin" },
+                          { label: `10 mm`, val: 10, tip: "Template Guides Margin" },
+                          { label: `15 mm`, val: 15, tip: "Hardcover Wrap" }
                         ].map(p => (
                           <button
                             key={p.val}
                             type="button"
                             onClick={() => setBleedCutMm(p.val)}
-                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium border transition-all ${
+                            title={p.tip}
+                            className={`py-1 rounded text-[10px] font-mono font-medium border text-center transition-all ${
                               bleedCutMm === p.val
                                 ? 'bg-gold text-black border-gold font-bold shadow-xs'
-                                : 'bg-secondary/70 border-border text-muted-foreground hover:text-foreground'
+                                : 'bg-secondary/70 border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
                             }`}
                           >
                             {p.label}
