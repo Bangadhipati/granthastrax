@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { 
   Book, Settings, Download, UploadCloud, RefreshCw, 
-  ChevronRight, CheckCircle2, Ruler, Type, Hash, 
-  Barcode, Loader2, CreditCard
+  CheckCircle2, Ruler, Barcode, Loader2, ArrowLeft, ArrowRight,
+  Layers, Check, Sparkles, FileText, Sliders
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -12,7 +12,14 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 // --- Data Constants ---
-const SIZES = [
+export interface BookSize {
+  name: string;
+  inches: string;
+  w: number;
+  h: number;
+}
+
+const SIZES: BookSize[] = [
   { name: "Mass Market Paperback", inches: '4.19" × 6.87"', w: 106.4, h: 174.5 },
   { name: "Trade Paperback (US)", inches: '6" × 9"', w: 152.4, h: 228.6 },
   { name: "A5", inches: '5.83" × 8.27"', w: 148, h: 210 },
@@ -26,6 +33,14 @@ const CURRENCIES = [
   { code: "GBP", symbol: "£" }, { code: "INR", symbol: "₹" },
   { code: "CAD", symbol: "$" }, { code: "AUD", symbol: "$" },
 ];
+
+const GSM_THICKNESS: Record<string, number> = {
+  "50": 0.05,
+  "70": 0.0572,
+  "80": 0.0635,
+  "100": 0.07,
+  "120": 0.08
+};
 
 // --- 3D Book Viewer Component ---
 function BookViewer3D({ coverUrl, spineWidth, bookWidth, bookHeight }: { coverUrl: string, spineWidth: number, bookWidth: number, bookHeight: number }) {
@@ -42,7 +57,7 @@ function BookViewer3D({ coverUrl, spineWidth, bookWidth, bookHeight }: { coverUr
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, mountRef.current.clientWidth / mountRef.current.clientHeight, 0.1, 100);
-    camera.position.set(0, 2, 8);
+    camera.position.set(0, 1.5, 7.5);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
@@ -56,15 +71,15 @@ function BookViewer3D({ coverUrl, spineWidth, bookWidth, bookHeight }: { coverUr
     controls.maxDistance = 15;
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
     
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
     dirLight.position.set(5, 5, 5);
     dirLight.castShadow = true;
     scene.add(dirLight);
 
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.35);
     fillLight.position.set(-5, 0, -5);
     scene.add(fillLight);
 
@@ -123,7 +138,7 @@ function BookViewer3D({ coverUrl, spineWidth, bookWidth, bookHeight }: { coverUr
       // Pages (Inner block) to give thickness to the book
       const pagesGeo = new THREE.BoxGeometry(w - 0.05, h - 0.05, d - 0.02);
       const pagesMesh = new THREE.Mesh(pagesGeo, pageMaterial);
-      pagesMesh.position.set(0.025, 0, 0); // slightly offset to the right so it doesn't clip the spine
+      pagesMesh.position.set(0.025, 0, 0);
       bookGroup.add(pagesMesh);
 
       // Center the group
@@ -149,14 +164,15 @@ function BookViewer3D({ coverUrl, spineWidth, bookWidth, bookHeight }: { coverUr
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      if (mountRef.current) mountRef.current.removeChild(renderer.domElement);
+      if (mountRef.current && renderer.domElement.parentNode === mountRef.current) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
       renderer.dispose();
     };
   }, [coverUrl, spineWidth, bookWidth, bookHeight]);
 
-  return <div ref={mountRef} className="w-full h-[500px] cursor-grab active:cursor-grabbing bg-muted/20 rounded-lg border border-border" />;
+  return <div ref={mountRef} className="w-full h-[520px] cursor-grab active:cursor-grabbing bg-muted/20 rounded-lg border border-border" />;
 }
-
 
 // --- Main View ---
 export function WriterView() {
@@ -164,10 +180,17 @@ export function WriterView() {
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Config State
-  const [selectedSize, setSelectedSize] = useState(SIZES[1]); // Default 6x9
+  const defaultSize = SIZES[1] ?? { name: "Trade Paperback (US)", inches: '6" × 9"', w: 152.4, h: 228.6 };
+  const [selectedSize, setSelectedSize] = useState<BookSize>(defaultSize);
+  const [isCustomSize, setIsCustomSize] = useState(false);
+  const [customUnit, setCustomUnit] = useState<"mm" | "in" | "cm">("mm");
+  const [customWidthMm, setCustomWidthMm] = useState(152.4);
+  const [customHeightMm, setCustomHeightMm] = useState(228.6);
+  const [widthInputStr, setWidthInputStr] = useState("152.4");
+  const [heightInputStr, setHeightInputStr] = useState("228.6");
+
   const [coverType, setCoverType] = useState<"paperback" | "hardcover">("paperback");
   const [gsm, setGsm] = useState<"50" | "70" | "80" | "100" | "120">("80");
-  const [shade, setShade] = useState("White");
   const [pageCount, setPageCount] = useState(250);
   const [title, setTitle] = useState("My Epic Novel");
   const [author, setAuthor] = useState("Author Name");
@@ -176,12 +199,68 @@ export function WriterView() {
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("USD");
 
+  const formatValForUnit = (mm: number, unit: "mm" | "in" | "cm"): string => {
+    if (unit === "in") return (mm / 25.4).toFixed(2);
+    if (unit === "cm") return (mm / 10).toFixed(2);
+    return mm.toFixed(1);
+  };
+
+  const updateSelectedCustomSize = (wMm: number, hMm: number) => {
+    setSelectedSize({
+      name: "Custom Size",
+      inches: `${(wMm / 25.4).toFixed(2)}" × ${(hMm / 25.4).toFixed(2)}"`,
+      w: parseFloat(wMm.toFixed(2)),
+      h: parseFloat(hMm.toFixed(2)),
+    });
+  };
+
+  const handleUnitSwitch = (newUnit: "mm" | "in" | "cm") => {
+    setCustomUnit(newUnit);
+    setWidthInputStr(formatValForUnit(customWidthMm, newUnit));
+    setHeightInputStr(formatValForUnit(customHeightMm, newUnit));
+  };
+
+  const handleSelectPreset = (s: BookSize) => {
+    setIsCustomSize(false);
+    setSelectedSize(s);
+  };
+
+  const handleSelectCustom = () => {
+    setIsCustomSize(true);
+    updateSelectedCustomSize(customWidthMm, customHeightMm);
+  };
+
+  const handleWidthInputChange = (valStr: string) => {
+    setWidthInputStr(valStr);
+    const num = parseFloat(valStr);
+    if (!isNaN(num) && num > 0) {
+      const mm = customUnit === "in" ? num * 25.4 : customUnit === "cm" ? num * 10 : num;
+      setCustomWidthMm(mm);
+      updateSelectedCustomSize(mm, customHeightMm);
+    }
+  };
+
+  const handleHeightInputChange = (valStr: string) => {
+    setHeightInputStr(valStr);
+    const num = parseFloat(valStr);
+    if (!isNaN(num) && num > 0) {
+      const mm = customUnit === "in" ? num * 25.4 : customUnit === "cm" ? num * 10 : num;
+      setCustomHeightMm(mm);
+      updateSelectedCustomSize(customWidthMm, mm);
+    }
+  };
+
   // Output State
   const [spineWidth, setSpineWidth] = useState(0);
   const [templateUrl, setTemplateUrl] = useState<string | null>(null);
   const [barcodeUrl, setBarcodeUrl] = useState<string | null>(null);
-  const [customCoverFile, setCustomCoverFile] = useState<File | null>(null);
   const [customCoverUrl, setCustomCoverUrl] = useState<string | null>(null);
+
+  // Live estimated dimensions
+  const estimatedSpine = Math.max(3, (pageCount * (GSM_THICKNESS[gsm] ?? 0.0635)) + (coverType === 'hardcover' ? 6 : 0));
+  const activeSpine = spineWidth > 0 ? spineWidth : parseFloat(estimatedSpine.toFixed(2));
+  const totalCoverWidth = (selectedSize.w * 2 + activeSpine + 6).toFixed(1); // includes 3mm bleed each side
+  const totalCoverHeight = (selectedSize.h + 6).toFixed(1); // includes 3mm bleed top & bottom
 
   // --- Handlers ---
   const handleGenerateAssets = async () => {
@@ -224,7 +303,6 @@ export function WriterView() {
   const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      setCustomCoverFile(file);
       setCustomCoverUrl(URL.createObjectURL(file));
       setStage(3);
     }
@@ -238,231 +316,643 @@ export function WriterView() {
         description="Configure your book's physical specs, generate precise print-ready templates and barcodes, and visualize the final product in 3D."
       />
 
-      <div className="mx-auto mt-8 max-w-5xl px-6 pb-20">
-        {/* --- Progress Steps --- */}
-        <div className="flex items-center justify-center gap-4 mb-12">
-          <div className={`flex items-center gap-2 ${stage >= 1 ? 'text-gold' : 'text-muted-foreground'}`}>
-            <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 ${stage >= 1 ? 'border-gold bg-gold/10' : 'border-border'}`}>1</div>
-            <span className="text-sm font-medium">Configure</span>
-          </div>
-          <div className="h-px w-12 bg-border"></div>
-          <div className={`flex items-center gap-2 ${stage >= 2 ? 'text-gold' : 'text-muted-foreground'}`}>
-            <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 ${stage >= 2 ? 'border-gold bg-gold/10' : 'border-border'}`}>2</div>
-            <span className="text-sm font-medium">Get Assets</span>
-          </div>
-          <div className="h-px w-12 bg-border"></div>
-          <div className={`flex items-center gap-2 ${stage >= 3 ? 'text-gold' : 'text-muted-foreground'}`}>
-            <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 ${stage >= 3 ? 'border-gold bg-gold/10' : 'border-border'}`}>3</div>
-            <span className="text-sm font-medium">3D Preview</span>
+      {/* Widescreen optimized layout: max-w-7xl with fluid margins */}
+      <div className="mx-auto mt-4 sm:mt-6 max-w-7xl w-full px-4 sm:px-6 lg:px-8 pb-16">
+        
+        {/* --- Progress Steps (Compact, elegant) --- */}
+        <div className="flex items-center justify-center gap-3 sm:gap-6 mb-6 sm:mb-8">
+          <button 
+            type="button"
+            onClick={() => setStage(1)}
+            className={`flex items-center gap-2 transition-colors ${stage >= 1 ? 'text-gold' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold border-2 transition-all ${stage >= 1 ? 'border-gold bg-gold/15 text-gold' : 'border-border'}`}>
+              1
+            </div>
+            <span className="text-xs sm:text-sm font-medium">1. Configure</span>
+          </button>
+          
+          <div className="h-px w-8 sm:w-16 bg-border" />
+          
+          <button 
+            type="button"
+            onClick={() => { if (spineWidth > 0 || stage > 1) setStage(2); }}
+            disabled={stage < 2 && spineWidth === 0}
+            className={`flex items-center gap-2 transition-colors ${stage >= 2 ? 'text-gold' : 'text-muted-foreground'} ${stage < 2 ? 'opacity-60 cursor-not-allowed' : 'hover:text-foreground'}`}
+          >
+            <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold border-2 transition-all ${stage >= 2 ? 'border-gold bg-gold/15 text-gold' : 'border-border'}`}>
+              2
+            </div>
+            <span className="text-xs sm:text-sm font-medium">2. Get Assets</span>
+          </button>
+
+          <div className="h-px w-8 sm:w-16 bg-border" />
+
+          <div className={`flex items-center gap-2 ${stage >= 3 ? 'text-gold' : 'text-muted-foreground opacity-60'}`}>
+            <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold border-2 transition-all ${stage >= 3 ? 'border-gold bg-gold/15 text-gold' : 'border-border'}`}>
+              3
+            </div>
+            <span className="text-xs sm:text-sm font-medium">3. 3D Preview</span>
           </div>
         </div>
 
-        {/* --- Stage 1: Configure --- */}
+        {/* --- Stage 1: Configure (Two-Column Widescreen Layout) --- */}
         {stage === 1 && (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <Panel>
-              <h2 className="text-lg font-medium flex items-center gap-2 mb-6"><Ruler className="w-5 h-5 text-gold"/> Book Dimensions</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {SIZES.map(s => (
-                  <button
-                    key={s.name}
-                    onClick={() => setSelectedSize(s)}
-                    className={`p-4 rounded-lg border text-left transition-all ${selectedSize.name === s.name ? 'border-gold bg-gold/5 ring-1 ring-gold' : 'border-border hover:border-gold/50'}`}
-                  >
-                    <div className="font-medium text-sm">{s.name}</div>
-                    <div className="text-xs text-muted-foreground mt-1">{s.inches}</div>
-                    <div className="text-xs text-muted-foreground">{s.w} × {s.h} mm</div>
-                  </button>
-                ))}
-              </div>
-            </Panel>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            
+            {/* Left Column: Form Controls (8 cols on xl) */}
+            <div className="lg:col-span-7 xl:col-span-8 space-y-5">
+              
+              {/* Trim Dimensions Selection */}
+              <Panel className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm sm:text-base font-semibold flex items-center gap-2 text-foreground">
+                    <Ruler className="w-4 h-4 text-gold" /> Book Trim Sizes
+                  </h2>
+                  <span className="text-xs text-muted-foreground">Standard publishing industry or custom dimensions</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {SIZES.map(s => {
+                    const isSelected = !isCustomSize && selectedSize.name === s.name;
+                    return (
+                      <button
+                        key={s.name}
+                        type="button"
+                        onClick={() => handleSelectPreset(s)}
+                        className={`p-3 rounded-lg border text-left transition-all duration-200 relative ${
+                          isSelected 
+                            ? 'border-gold bg-gold/10 ring-1 ring-gold shadow-sm' 
+                            : 'border-border bg-card/40 hover:border-gold/40 hover:bg-secondary/40'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <span className={`font-semibold text-xs sm:text-sm ${isSelected ? 'text-gold' : 'text-foreground'}`}>
+                            {s.name}
+                          </span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-gold shrink-0 mt-0.5" />}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground font-mono mt-1">{s.inches}</div>
+                        <div className="text-[11px] text-muted-foreground font-mono">{s.w} × {s.h} mm</div>
+                      </button>
+                    );
+                  })}
 
-            <div className="grid md:grid-cols-2 gap-8">
-              <Panel>
-                <h2 className="text-lg font-medium flex items-center gap-2 mb-6"><Book className="w-5 h-5 text-gold"/> Physical Properties</h2>
-                
-                <div className="space-y-4">
+                  {/* Custom Size Option Card */}
+                  <button
+                    type="button"
+                    onClick={handleSelectCustom}
+                    className={`p-3 rounded-lg border text-left transition-all duration-200 relative ${
+                      isCustomSize 
+                        ? 'border-gold bg-gold/10 ring-1 ring-gold shadow-sm' 
+                        : 'border-border bg-card/40 hover:border-gold/40 hover:bg-secondary/40'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-1">
+                      <span className={`font-semibold text-xs sm:text-sm flex items-center gap-1.5 ${isCustomSize ? 'text-gold' : 'text-foreground'}`}>
+                        <Sliders className="size-3.5 text-gold" /> Custom Size
+                      </span>
+                      {isCustomSize && <Check className="w-3.5 h-3.5 text-gold shrink-0 mt-0.5" />}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground font-mono mt-1">
+                      {(customWidthMm / 25.4).toFixed(2)}" × {(customHeightMm / 25.4).toFixed(2)}"
+                    </div>
+                    <div className="text-[11px] text-muted-foreground font-mono">
+                      {customWidthMm.toFixed(1)} × {customHeightMm.toFixed(1)} mm
+                    </div>
+                  </button>
+                </div>
+
+                {/* Custom Dimensions Editor */}
+                {isCustomSize && (
+                  <div className="mt-4 p-4 rounded-lg bg-background/80 border border-gold/40 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex items-center justify-between mb-3 border-b border-border/50 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Sliders className="w-3.5 h-3.5 text-gold" />
+                        <span className="text-xs font-semibold text-foreground">
+                          Custom Trim Dimensions
+                        </span>
+                      </div>
+
+                      {/* Unit Selector: mm / in / cm */}
+                      <div className="flex items-center gap-1 bg-secondary/80 p-0.5 rounded-md border border-border">
+                        {(['mm', 'in', 'cm'] as const).map(u => (
+                          <button
+                            key={u}
+                            type="button"
+                            onClick={() => handleUnitSwitch(u)}
+                            className={`px-2.5 py-0.5 rounded text-[11px] font-semibold transition-all ${
+                              customUnit === u 
+                                ? 'bg-gold text-black shadow-sm font-bold' 
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {u === 'in' ? 'inch' : u}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs font-medium text-muted-foreground">
+                            Custom Width ({customUnit === 'in' ? 'Inches' : customUnit})
+                          </label>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {customUnit === 'mm' 
+                              ? `≈ ${(customWidthMm / 25.4).toFixed(2)} in • ${(customWidthMm / 10).toFixed(2)} cm`
+                              : customUnit === 'in'
+                                ? `≈ ${customWidthMm.toFixed(1)} mm • ${(customWidthMm / 10).toFixed(2)} cm`
+                                : `≈ ${customWidthMm.toFixed(1)} mm • ${(customWidthMm / 25.4).toFixed(2)} in`}
+                          </span>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min={customUnit === 'in' ? 2 : customUnit === 'cm' ? 5 : 50}
+                            max={customUnit === 'in' ? 20 : customUnit === 'cm' ? 50 : 500}
+                            step={customUnit === 'in' ? "0.05" : customUnit === 'cm' ? "0.1" : "0.5"}
+                            value={widthInputStr}
+                            onChange={(e) => handleWidthInputChange(e.target.value)}
+                            className="w-full bg-background border border-border rounded-md px-3 py-1.5 pr-12 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gold"
+                            placeholder={customUnit === 'in' ? "6.0" : customUnit === 'cm' ? "15.0" : "150"}
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gold font-mono font-semibold uppercase">
+                            {customUnit === 'in' ? 'in' : customUnit}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs font-medium text-muted-foreground">
+                            Custom Height ({customUnit === 'in' ? 'Inches' : customUnit})
+                          </label>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {customUnit === 'mm' 
+                              ? `≈ ${(customHeightMm / 25.4).toFixed(2)} in • ${(customHeightMm / 10).toFixed(2)} cm`
+                              : customUnit === 'in'
+                                ? `≈ ${customHeightMm.toFixed(1)} mm • ${(customHeightMm / 10).toFixed(2)} cm`
+                                : `≈ ${customHeightMm.toFixed(1)} mm • ${(customHeightMm / 25.4).toFixed(2)} in`}
+                          </span>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min={customUnit === 'in' ? 2 : customUnit === 'cm' ? 5 : 50}
+                            max={customUnit === 'in' ? 24 : customUnit === 'cm' ? 60 : 600}
+                            step={customUnit === 'in' ? "0.05" : customUnit === 'cm' ? "0.1" : "0.5"}
+                            value={heightInputStr}
+                            onChange={(e) => handleHeightInputChange(e.target.value)}
+                            className="w-full bg-background border border-border rounded-md px-3 py-1.5 pr-12 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gold"
+                            placeholder={customUnit === 'in' ? "9.0" : customUnit === 'cm' ? "22.0" : "220"}
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gold font-mono font-semibold uppercase">
+                            {customUnit === 'in' ? 'in' : customUnit}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Panel>
+
+              {/* Physical Properties & Metadata Subgrid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Physical Properties */}
+                <Panel className="p-5 space-y-4">
+                  <h2 className="text-sm sm:text-base font-semibold flex items-center gap-2 text-foreground border-b border-border/60 pb-3">
+                    <Book className="w-4 h-4 text-gold" /> Physical Properties
+                  </h2>
+                  
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Cover Type</label>
-                    <div className="flex gap-4 mt-2">
-                      <label className="flex items-center gap-2 text-sm"><input type="radio" checked={coverType === 'paperback'} onChange={() => setCoverType('paperback')} className="text-gold accent-gold"/> Paperback</label>
-                      <label className="flex items-center gap-2 text-sm"><input type="radio" checked={coverType === 'hardcover'} onChange={() => setCoverType('hardcover')} className="text-gold accent-gold"/> Hardcover (+6mm spine)</label>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Cover Type</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCoverType('paperback')}
+                        className={`px-3 py-2 rounded-md border text-xs font-medium transition-all ${
+                          coverType === 'paperback' 
+                            ? 'border-gold bg-gold/15 text-gold font-semibold shadow-sm' 
+                            : 'border-border bg-background hover:bg-secondary/60 text-muted-foreground'
+                        }`}
+                      >
+                        Paperback
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCoverType('hardcover')}
+                        className={`px-3 py-2 rounded-md border text-xs font-medium transition-all ${
+                          coverType === 'hardcover' 
+                            ? 'border-gold bg-gold/15 text-gold font-semibold shadow-sm' 
+                            : 'border-border bg-background hover:bg-secondary/60 text-muted-foreground'
+                        }`}
+                      >
+                        Hardcover (+6mm)
+                      </button>
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Paper Weight (GSM)</label>
-                    <select className="w-full mt-2 bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gold" value={gsm} onChange={e => setGsm(e.target.value as any)}>
-                      <option value="50">50 GSM (Thinner, novel standard)</option>
-                      <option value="70">70 GSM</option>
-                      <option value="80">80 GSM (Standard trade)</option>
-                      <option value="100">100 GSM (Premium / Textbooks)</option>
-                      <option value="120">120 GSM (Photo books)</option>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Paper Weight (GSM)</label>
+                    <select 
+                      className="w-full bg-background border border-border rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-gold" 
+                      value={gsm} 
+                      onChange={e => setGsm(e.target.value as any)}
+                    >
+                      <option value="50">50 GSM — Novel standard / thin</option>
+                      <option value="70">70 GSM — Trade standard</option>
+                      <option value="80">80 GSM — High opacity trade</option>
+                      <option value="100">100 GSM — Premium / Textbooks</option>
+                      <option value="120">120 GSM — Art & photo books</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Total Page Count</label>
-                    <input type="number" min="24" max="2000" value={pageCount} onChange={e => setPageCount(parseInt(e.target.value) || 24)} className="w-full mt-2 bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gold" />
-                    <p className="text-xs text-muted-foreground mt-1">Minimum 24 pages required for perfect binding.</p>
-                  </div>
-                </div>
-              </Panel>
-
-              <Panel>
-                <h2 className="text-lg font-medium flex items-center gap-2 mb-6"><Barcode className="w-5 h-5 text-gold"/> Metadata & Barcode</h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Book Title</label>
-                    <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. The Great Gatsby" className="w-full mt-2 bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gold" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Author Name</label>
-                    <input type="text" value={author} onChange={e => setAuthor(e.target.value)} placeholder="e.g. F. Scott Fitzgerald" className="w-full mt-2 bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gold" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">ISBN-13 (Optional)</label>
-                    <input type="text" value={isbn} onChange={e => setIsbn(e.target.value)} placeholder="978-X-XXXX-XXXX-X" className="w-full mt-2 bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gold" />
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="flex-1">
-                      <label className="text-sm font-medium text-muted-foreground">Retail Price</label>
-                      <input type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} placeholder="19.99" className="w-full mt-2 bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gold" />
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Total Page Count</label>
+                      <span className="text-[11px] font-mono text-gold font-semibold">{pageCount} pages</span>
                     </div>
-                    <div className="w-1/3">
-                      <label className="text-sm font-medium text-muted-foreground">Currency</label>
-                      <select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full mt-2 bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gold">
+                    <input 
+                      type="number" 
+                      min="24" 
+                      max="2000" 
+                      value={pageCount} 
+                      onChange={e => setPageCount(Math.max(24, parseInt(e.target.value) || 24))} 
+                      className="w-full bg-background border border-border rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-gold" 
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">Minimum 24 pages required for bound spine calculation.</p>
+                  </div>
+                </Panel>
+
+                {/* Metadata & Barcode */}
+                <Panel className="p-5 space-y-4">
+                  <h2 className="text-sm sm:text-base font-semibold flex items-center gap-2 text-foreground border-b border-border/60 pb-3">
+                    <Barcode className="w-4 h-4 text-gold" /> Metadata & Barcode
+                  </h2>
+
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Book Title</label>
+                    <input 
+                      type="text" 
+                      value={title} 
+                      onChange={e => setTitle(e.target.value)} 
+                      placeholder="e.g. GranthAstra Chronicles" 
+                      className="w-full bg-background border border-border rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-gold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">Author Name</label>
+                    <input 
+                      type="text" 
+                      value={author} 
+                      onChange={e => setAuthor(e.target.value)} 
+                      placeholder="e.g. Dr. H. Sharma" 
+                      className="w-full bg-background border border-border rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-gold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground block mb-1.5">ISBN-13 (Optional for Barcode)</label>
+                    <input 
+                      type="text" 
+                      value={isbn} 
+                      onChange={e => setIsbn(e.target.value)} 
+                      placeholder="978-0-123456-47-2" 
+                      className="w-full bg-background border border-border rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-gold" 
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">Retail Price</label>
+                      <input 
+                        type="number" 
+                        step="0.01" 
+                        value={price} 
+                        onChange={e => setPrice(e.target.value)} 
+                        placeholder="19.99" 
+                        className="w-full bg-background border border-border rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-gold" 
+                      />
+                    </div>
+                    <div className="w-24">
+                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">Currency</label>
+                      <select 
+                        value={currency} 
+                        onChange={e => setCurrency(e.target.value)} 
+                        className="w-full bg-background border border-border rounded-md px-2 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-gold"
+                      >
                         {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code} {c.symbol}</option>)}
                       </select>
                     </div>
                   </div>
-                </div>
-              </Panel>
+                </Panel>
+              </div>
             </div>
 
-            <div className="flex justify-end pt-4">
-              <button 
-                onClick={handleGenerateAssets}
-                disabled={isGenerating}
-                className="flex items-center gap-2 bg-gold text-black px-6 py-3 rounded-md font-medium hover:bg-gold/90 transition disabled:opacity-50"
-              >
-                {isGenerating ? <Loader2 className="w-5 h-5 animate-spin"/> : <Settings className="w-5 h-5" />}
-                Generate Design Assets
-              </button>
+            {/* Right Column: Live Specifications & Sticky Primary Action (4 cols on xl) */}
+            <div className="lg:col-span-5 xl:col-span-4">
+              <div className="sticky top-6 space-y-4">
+                
+                <Panel className="p-5 border-gold/40 bg-gradient-to-b from-card via-card to-card/90 shadow-md">
+                  <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
+                    <h3 className="text-sm font-semibold flex items-center gap-2 text-foreground">
+                      <Sparkles className="w-4 h-4 text-gold" /> Live Production Summary
+                    </h3>
+                    <span className="text-[10px] font-mono uppercase bg-gold/15 text-gold px-2 py-0.5 rounded font-semibold">
+                      Auto-Calc
+                    </span>
+                  </div>
+
+                  {/* 2D Wraparound Blueprint preview */}
+                  <div className="mb-4 rounded-lg bg-background/60 border border-border/80 p-3">
+                    <p className="text-[11px] text-muted-foreground font-medium mb-2 flex items-center justify-between">
+                      <span>Cover Blueprint Layout</span>
+                      <span className="text-[10px] text-gold font-mono">{totalCoverWidth} × {totalCoverHeight} mm</span>
+                    </p>
+                    <div className="flex h-16 w-full rounded border border-dashed border-gold/50 overflow-hidden text-[10px] font-mono text-center">
+                      <div className="flex-1 bg-secondary/30 flex items-center justify-center border-r border-border text-muted-foreground">
+                        Back ({selectedSize.w}mm)
+                      </div>
+                      <div className="w-14 bg-gold/20 flex flex-col items-center justify-center border-r border-border text-gold font-semibold px-0.5">
+                        <span className="text-[9px]">Spine</span>
+                        <span>{estimatedSpine.toFixed(1)}mm</span>
+                      </div>
+                      <div className="flex-1 bg-secondary/30 flex items-center justify-center text-muted-foreground">
+                        Front ({selectedSize.w}mm)
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/80 text-center mt-1.5">Includes standard 3mm bleed & 5mm safe zones</p>
+                  </div>
+
+                  {/* Specs List */}
+                  <div className="space-y-2 text-xs divide-y divide-border/40">
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="text-muted-foreground">Trim Size</span>
+                      <span className="font-medium text-foreground">{selectedSize.name}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="text-muted-foreground">Trim Dimensions</span>
+                      <span className="font-mono text-foreground">{selectedSize.w} × {selectedSize.h} mm</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="text-muted-foreground">Spine Thickness</span>
+                      <span className="font-mono font-semibold text-gold">~{estimatedSpine.toFixed(2)} mm</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="text-muted-foreground">Binding Format</span>
+                      <span className="font-medium text-foreground capitalize">{coverType}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="text-muted-foreground">Paper Density</span>
+                      <span className="font-medium text-foreground">{gsm} GSM ({pageCount} pp)</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="text-muted-foreground">ISBN Barcode</span>
+                      <span className="font-medium text-foreground">{isbn ? 'Configured' : 'None (Optional)'}</span>
+                    </div>
+                  </div>
+
+                  {/* Primary Action Button directly inside the sticky card! */}
+                  <div className="mt-5 pt-3 border-t border-border">
+                    <button 
+                      type="button"
+                      onClick={handleGenerateAssets}
+                      disabled={isGenerating}
+                      className="w-full flex items-center justify-center gap-2 bg-gold text-black py-3 px-4 rounded-lg text-xs sm:text-sm font-semibold hover:bg-gold/90 transition-all duration-200 shadow-md active:scale-[0.99] disabled:opacity-50"
+                    >
+                      {isGenerating ? <Loader2 className="w-4 h-4 animate-spin"/> : <Settings className="w-4 h-4" />}
+                      <span>{isGenerating ? "Calculating Specs & Template..." : "Generate Design Assets"}</span>
+                    </button>
+                    <p className="text-[10px] text-muted-foreground text-center mt-2">
+                      Instant vector PDF template & high-res barcode generation
+                    </p>
+                  </div>
+                </Panel>
+              </div>
             </div>
+
           </div>
         )}
 
-        {/* --- Stage 2: Get Assets --- */}
+        {/* --- Stage 2: Get Assets (3-Column Horizontal Grid on Widescreen) --- */}
         {stage === 2 && (
-          <div className="space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
-            <Panel className="border-gold/30 bg-gold/5">
-               <div className="flex items-start gap-4">
-                 <CheckCircle2 className="w-6 h-6 text-gold shrink-0 mt-1" />
-                 <div>
-                   <h3 className="text-lg font-medium text-foreground">Specifications Calculated</h3>
-                   <p className="text-sm text-muted-foreground mt-1">
-                     Based on your inputs, your book spine will be exactly <strong className="text-gold">{spineWidth} mm</strong> thick.
-                     Download the precise template and barcode below, design your cover in Canva, and upload the final image in Step 3.
-                   </p>
-                 </div>
-               </div>
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            
+            {/* Top Quick Summary Alert */}
+            <Panel className="p-4 border-gold/40 bg-gold/5 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="w-5 h-5 text-gold shrink-0" />
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Specifications Calculated Successfully</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Spine is precisely <strong className="text-gold font-mono">{spineWidth} mm</strong>. Full canvas dimensions: <strong className="text-foreground font-mono">{totalCoverWidth} × {totalCoverHeight} mm</strong> (with 3mm bleed).
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setStage(1)}
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-gold transition-colors font-medium underline"
+              >
+                <ArrowLeft className="size-3.5" /> Edit Configuration
+              </button>
             </Panel>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              <Panel className="flex flex-col text-center p-6">
-                <div className="flex items-center justify-center bg-primary/10 w-12 h-12 rounded-full mx-auto mb-4">
-                  <Ruler className="w-6 h-6 text-primary"/>
+            {/* 3 Columns Side-by-Side: Template, Barcode, Upload */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              
+              {/* Card 1: Cover Template PDF */}
+              <Panel className="flex flex-col p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Ruler className="w-4 h-4 text-gold"/>
+                    <h3 className="text-sm font-semibold">1. Cover Template (PDF)</h3>
+                  </div>
+                  <span className="text-[10px] font-mono text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">Vector PDF</span>
                 </div>
-                <h3 className="text-lg font-medium">Cover Template (PDF)</h3>
-                <p className="text-xs text-muted-foreground mt-2 mb-4">
-                  Wraparound template including spine width ({spineWidth} mm), 3mm bleed, and 5mm safe zones.
+                <p className="text-xs text-muted-foreground mb-3">
+                  Full wraparound with exact {spineWidth}mm spine, 3mm outer bleed, and 5mm safe margins.
                 </p>
-                {templateUrl ? (
-                  <div className="flex-1 w-full bg-muted/30 border border-border rounded-md overflow-hidden mb-4 relative aspect-[3/2]">
+                
+                <div className="flex-1 w-full bg-muted/30 border border-border rounded-md overflow-hidden mb-3 relative aspect-[4/3] min-h-[180px]">
+                  {templateUrl ? (
                     <iframe src={`${templateUrl}#toolbar=0&view=FitH`} className="w-full h-full border-0 absolute inset-0" title="Template Preview"/>
-                  </div>
-                ) : (
-                  <div className="flex-1 flex items-center justify-center bg-muted/10 border border-border rounded-md mb-4 aspect-[3/2]">
-                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground"/>
-                  </div>
-                )}
-                <a href={templateUrl || "#"} download={`template-${selectedSize.name.replace(/\s+/g, '-').toLowerCase()}.pdf`} className={`w-full py-2 bg-secondary text-foreground border border-border rounded-md hover:bg-secondary/80 flex items-center justify-center gap-2 text-sm font-medium transition ${!templateUrl ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <Download className="w-4 h-4"/> Download PDF
+                  ) : (
+                    <div className="flex-1 h-full flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground"/>
+                    </div>
+                  )}
+                </div>
+
+                <a 
+                  href={templateUrl || "#"} 
+                  download={`template-${selectedSize.name.replace(/\s+/g, '-').toLowerCase()}.pdf`} 
+                  className={`w-full py-2 bg-secondary text-foreground border border-border rounded-md hover:bg-secondary/80 flex items-center justify-center gap-2 text-xs font-medium transition ${!templateUrl ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  <Download className="w-3.5 h-3.5"/> Download PDF Template
                 </a>
               </Panel>
 
-              <Panel className={`flex flex-col text-center p-6 ${!isbn ? 'opacity-50' : ''}`}>
-                <div className="flex items-center justify-center bg-primary/10 w-12 h-12 rounded-full mx-auto mb-4">
-                  <Barcode className="w-6 h-6 text-primary"/>
+              {/* Card 2: ISBN Barcode */}
+              <Panel className={`flex flex-col p-5 ${!isbn ? 'opacity-60' : ''}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Barcode className="w-4 h-4 text-gold"/>
+                    <h3 className="text-sm font-semibold">2. ISBN Barcode (PNG)</h3>
+                  </div>
+                  <span className="text-[10px] font-mono text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">EAN-13</span>
                 </div>
-                <h3 className="text-lg font-medium">ISBN Barcode (PNG)</h3>
-                <p className="text-xs text-muted-foreground mt-2 mb-4">
-                  {isbn ? `EAN-13 barcode for ISBN ${isbn} with optional price tag.` : 'Provide an ISBN in Step 1 to generate a barcode.'}
+                <p className="text-xs text-muted-foreground mb-3">
+                  {isbn ? `Print-ready barcode for ISBN ${isbn} with price tag.` : 'No ISBN provided in Step 1 (optional).'}
                 </p>
                 
-                <div className="flex-1 w-full bg-white border border-border rounded-md overflow-hidden mb-4 flex items-center justify-center p-4 min-h-[160px]">
+                <div className="flex-1 w-full bg-white border border-border rounded-md overflow-hidden mb-3 flex items-center justify-center p-3 aspect-[4/3] min-h-[180px]">
                   {barcodeUrl ? (
                     <img src={barcodeUrl} alt="ISBN Barcode" className="max-w-full max-h-32 object-contain" />
                   ) : isbn ? (
                     <Loader2 className="w-6 h-6 animate-spin text-muted-foreground"/>
                   ) : (
-                    <span className="text-xs text-muted-foreground">No ISBN provided</span>
+                    <span className="text-xs text-muted-foreground">Barcode not requested</span>
                   )}
                 </div>
                 
-                <a href={barcodeUrl || "#"} download={`barcode-${isbn}.png`} className={`w-full py-2 bg-secondary text-foreground border border-border rounded-md hover:bg-secondary/80 flex items-center justify-center gap-2 text-sm font-medium transition ${!barcodeUrl ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <Download className="w-4 h-4"/> Download PNG
+                <a 
+                  href={barcodeUrl || "#"} 
+                  download={`barcode-${isbn}.png`} 
+                  className={`w-full py-2 bg-secondary text-foreground border border-border rounded-md hover:bg-secondary/80 flex items-center justify-center gap-2 text-xs font-medium transition ${!barcodeUrl ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  <Download className="w-3.5 h-3.5"/> Download Barcode PNG
                 </a>
               </Panel>
+
+              {/* Card 3: Upload Final Design (Side-by-side with no vertical scrolling!) */}
+              <Panel className="flex flex-col items-center justify-center border-dashed p-6 text-center bg-card/40">
+                <div className="p-3 rounded-full bg-gold/10 text-gold mb-3">
+                  <UploadCloud className="w-8 h-8" />
+                </div>
+                <h3 className="text-sm font-semibold mb-1">3. Upload Final Cover</h3>
+                <p className="text-xs text-muted-foreground mb-5 max-w-xs">
+                  Designed your cover with the template? Upload the flat image (PNG/JPG) to test fit and view your 3D mockup.
+                </p>
+                
+                <input 
+                  type="file" 
+                  id="cover-upload" 
+                  accept="image/png, image/jpeg" 
+                  className="hidden" 
+                  onChange={handleCoverUpload} 
+                />
+                <label 
+                  htmlFor="cover-upload" 
+                  className="cursor-pointer inline-flex items-center gap-2 bg-gold text-black px-5 py-2.5 rounded-md font-semibold text-xs hover:bg-gold/90 transition shadow-sm"
+                >
+                  <UploadCloud className="size-4" />
+                  <span>Upload & View 3D</span>
+                </label>
+              </Panel>
+
             </div>
 
-            <Panel className="flex flex-col items-center justify-center border-dashed py-16">
-               <UploadCloud className="w-10 h-10 text-gold mb-4" />
-               <h3 className="text-lg font-medium mb-2">Upload Final Cover Design</h3>
-               <p className="text-sm text-muted-foreground mb-6 text-center max-w-md">
-                 Once you've finished designing your full cover (Front + Spine + Back) using the template, upload the flat image (PNG/JPG) here to preview it in 3D.
-               </p>
-               <input type="file" id="cover-upload" accept="image/png, image/jpeg" className="hidden" onChange={handleCoverUpload} />
-               <label htmlFor="cover-upload" className="cursor-pointer bg-gold text-black px-6 py-2 rounded-md font-medium hover:bg-gold/90 transition text-sm">
-                 Upload Design
-               </label>
-            </Panel>
-            
-            <div className="flex justify-start">
-              <button onClick={() => setStage(1)} className="text-sm text-muted-foreground hover:text-foreground underline">← Back to Configuration</button>
-            </div>
           </div>
         )}
 
-        {/* --- Stage 3: 3D Preview --- */}
+        {/* --- Stage 3: 3D Preview (Split Layout on Widescreen) --- */}
         {stage === 3 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
-            <Panel className="p-0 overflow-hidden relative">
-              <div className="absolute top-4 left-4 bg-background/80 backdrop-blur-sm p-3 rounded-md border border-border z-10 pointer-events-none">
-                <p className="text-sm font-medium flex items-center gap-2"><RefreshCw className="w-4 h-4"/> Interactive 3D Preview</p>
-                <p className="text-xs text-muted-foreground mt-1">Drag to rotate • Scroll to zoom</p>
-              </div>
-              
-              {customCoverUrl && (
-                <Suspense fallback={<div className="w-full h-[500px] flex items-center justify-center bg-muted/20"><Loader2 className="w-8 h-8 animate-spin text-gold"/></div>}>
-                  <BookViewer3D 
-                    coverUrl={customCoverUrl} 
-                    spineWidth={spineWidth} 
-                    bookWidth={selectedSize.w} 
-                    bookHeight={selectedSize.h} 
-                  />
-                </Suspense>
-              )}
-            </Panel>
-
-            <div className="flex justify-between">
-              <button onClick={() => setStage(2)} className="text-sm text-muted-foreground hover:text-foreground underline">← Back to Assets</button>
-              <label className="cursor-pointer border border-border bg-secondary text-foreground px-4 py-2 rounded-md font-medium hover:bg-secondary/80 transition text-sm">
-                <input type="file" accept="image/png, image/jpeg" className="hidden" onClick={(e) => { (e.target as HTMLInputElement).value = ''; }} onChange={handleCoverUpload} />
-                Upload Different Cover
-              </label>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            
+            {/* 3D Canvas (Left 8 cols on desktop) */}
+            <div className="lg:col-span-8 xl:col-span-9">
+              <Panel className="p-0 overflow-hidden relative shadow-lg">
+                <div className="absolute top-4 left-4 bg-background/85 backdrop-blur-md p-2.5 rounded-md border border-border z-10 pointer-events-none">
+                  <p className="text-xs font-semibold flex items-center gap-2 text-foreground">
+                    <RefreshCw className="w-3.5 h-3.5 text-gold"/> Interactive 3D Mockup
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Left-click drag to rotate • Scroll to zoom</p>
+                </div>
+                
+                {customCoverUrl && (
+                  <Suspense fallback={<div className="w-full h-[520px] flex items-center justify-center bg-muted/20"><Loader2 className="w-8 h-8 animate-spin text-gold"/></div>}>
+                    <BookViewer3D 
+                      coverUrl={customCoverUrl} 
+                      spineWidth={spineWidth || activeSpine} 
+                      bookWidth={selectedSize.w} 
+                      bookHeight={selectedSize.h} 
+                    />
+                  </Suspense>
+                )}
+              </Panel>
             </div>
+
+            {/* Production Spec Sheet & Actions (Right 4 cols on desktop) */}
+            <div className="lg:col-span-4 xl:col-span-3 space-y-4">
+              <Panel className="p-5 space-y-4">
+                <div className="border-b border-border pb-3">
+                  <h3 className="text-sm font-semibold text-foreground">Production Verification</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">3D wrap preview check</p>
+                </div>
+
+                <div className="space-y-2 text-xs divide-y divide-border/40">
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-muted-foreground">Title</span>
+                    <span className="font-medium text-foreground truncate max-w-[150px]">{title}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-muted-foreground">Author</span>
+                    <span className="font-medium text-foreground truncate max-w-[150px]">{author}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-muted-foreground">Trim Size</span>
+                    <span className="font-medium text-foreground">{selectedSize.name}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-muted-foreground">Spine Width</span>
+                    <span className="font-mono font-semibold text-gold">{spineWidth || activeSpine} mm</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-muted-foreground">Pages</span>
+                    <span className="font-medium text-foreground">{pageCount} ({gsm} GSM)</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-muted-foreground">Cover Format</span>
+                    <span className="font-medium text-foreground capitalize">{coverType}</span>
+                  </div>
+                </div>
+
+                <div className="pt-3 space-y-2">
+                  <label className="cursor-pointer w-full flex items-center justify-center gap-2 border border-border bg-secondary text-foreground py-2.5 px-3 rounded-md text-xs font-medium hover:bg-secondary/80 transition">
+                    <input 
+                      type="file" 
+                      accept="image/png, image/jpeg" 
+                      className="hidden" 
+                      onClick={(e) => { (e.target as HTMLInputElement).value = ''; }} 
+                      onChange={handleCoverUpload} 
+                    />
+                    <UploadCloud className="size-3.5 text-gold" />
+                    <span>Upload Different Cover</span>
+                  </label>
+
+                  <button 
+                    type="button"
+                    onClick={() => setStage(2)}
+                    className="w-full flex items-center justify-center gap-2 border border-border/80 bg-background text-foreground py-2 px-3 rounded-md text-xs font-medium hover:bg-secondary/60 transition"
+                  >
+                    <ArrowLeft className="size-3.5" />
+                    <span>Back to Templates & Barcode</span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => setStage(1)}
+                    className="w-full text-center text-xs text-muted-foreground hover:text-gold transition py-1"
+                  >
+                    Reconfigure Dimensions
+                  </button>
+                </div>
+              </Panel>
+            </div>
+
           </div>
         )}
 
