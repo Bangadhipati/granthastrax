@@ -475,6 +475,65 @@ app.post('/api/compile', requireAuth, async (req, res) => {
   }
 });
 
+// --- Project Source Export (ZIP) Route ---
+app.post('/api/compile/export', requireAuth, async (req, res) => {
+  try {
+    const { content, images = [], pdfBase64, filename = 'project_source.zip' } = req.body;
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip();
+
+    // 1. Add main.tex
+    zip.addFile('main.tex', Buffer.from(content || '', 'utf8'));
+
+    // 2. Add compiled PDF if present
+    if (pdfBase64 && typeof pdfBase64 === 'string') {
+      try {
+        const pdfBuffer = Buffer.from(pdfBase64, 'base64');
+        if (pdfBuffer.length > 0) {
+          zip.addFile('document.pdf', pdfBuffer);
+        }
+      } catch (pdfErr) {
+        console.warn('Failed to parse pdfBase64 for ZIP export:', pdfErr.message);
+      }
+    }
+
+    // 3. Add all project images
+    if (Array.isArray(images) && images.length > 0) {
+      const axios = require('axios');
+      await Promise.allSettled(
+        images.map(async (img) => {
+          if (!img || !img.name || !img.url) return;
+          try {
+            const rawUrl = img.url.trim();
+            if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+              const imgRes = await axios.get(rawUrl, { responseType: 'arraybuffer', timeout: 15000 });
+              zip.addFile(img.name, Buffer.from(imgRes.data));
+            } else if (rawUrl.startsWith('data:image/')) {
+              const base64Data = rawUrl.split(',')[1];
+              if (base64Data) {
+                zip.addFile(img.name, Buffer.from(base64Data, 'base64'));
+              }
+            }
+          } catch (imgErr) {
+            console.warn(`Failed to download image ${img.name} for ZIP export:`, imgErr.message);
+          }
+        })
+      );
+    }
+
+    const zipBuffer = zip.toBuffer();
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
+      'Content-Length': zipBuffer.length
+    });
+    res.send(zipBuffer);
+  } catch (error) {
+    console.error('ZIP Export Error:', error);
+    res.status(500).json({ error: 'Failed to create ZIP export: ' + error.message });
+  }
+});
+
 // Image Studio Routes
 const imageStudioRoutes = require('./routes/imageStudio');
 app.use('/api/image-studio', imageStudioRoutes);

@@ -83,6 +83,7 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [compilationError, setCompilationError] = useState<CompilationErrorInfo | null>(null);
   const [isCompiling, setIsCompiling] = useState(false);
+  const [isExportingZip, setIsExportingZip] = useState(false);
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [latexZoom, setLatexZoom] = useState(1);
@@ -177,8 +178,8 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
         images: project?.images || []
       }, { responseType: 'blob' });
       
+      const blob = res.data;
       if (res.status === 200) {
-        const blob = res.data;
         if (blob.type && !blob.type.includes('pdf')) {
           await clearPreviewPdf();
           const text = await blob.text();
@@ -258,27 +259,56 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
   };
 
   const handleExportZip = async () => {
-    setIsCompiling(true);
+    setIsExportingZip(true);
     try {
+      // 1. Retrieve compiled PDF if present and saved in cache or currently displayed
+      let pdfBase64: string | undefined = undefined;
+      try {
+        let pdfBlob = await getProjectPdf(projectId);
+        if (!pdfBlob && pdfUrl) {
+          const res = await fetch(pdfUrl);
+          pdfBlob = await res.blob();
+        }
+        if (pdfBlob) {
+          pdfBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const result = reader.result as string;
+              const base64 = result.split(',')[1] || '';
+              resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(pdfBlob);
+          });
+        }
+      } catch (pdfErr) {
+        console.warn("Could not retrieve compiled PDF for ZIP export:", pdfErr);
+      }
+
+      const safeTitle = (project?.title || "project_source").replace(/[^a-zA-Z0-9_\-\s]/g, "").trim().replace(/\s+/g, "_") || "project_source";
+      const filename = `${safeTitle}.zip`;
+
       const res = await api.post("/api/compile/export", { 
         content: latexContent,
-        images: project?.images || []
+        images: project?.images || [],
+        pdfBase64,
+        filename
       }, { responseType: 'blob' });
       
-      const blob = res.data;
+      const blob = new Blob([res.data], { type: 'application/zip' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${project?.title || "project_source"}.zip`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error: any) {
-      console.error(error);
-      alert("Failed to export ZIP.");
+      console.error("ZIP Export Error:", error);
+      alert("Failed to export ZIP: " + (error.response?.data?.error || error.message || "Unknown error"));
     } finally {
-      setIsCompiling(false);
+      setIsExportingZip(false);
     }
   };
 
@@ -354,10 +384,11 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
             <button
               type="button"
               onClick={handleExportZip}
-              disabled={isCompiling}
+              disabled={isCompiling || isExportingZip}
               className="inline-flex items-center gap-2 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              <Download className="size-3.5" /> Export Source (ZIP)
+              {isExportingZip ? <Loader2 className="size-3.5 animate-spin text-gold" /> : <Download className="size-3.5" />} 
+              {isExportingZip ? "Exporting ZIP..." : "Export Source (ZIP)"}
             </button>
 
             <button
