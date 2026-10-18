@@ -1,11 +1,9 @@
 import { useState, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
-  UploadCloud, FileText, ImageIcon, Settings, Loader2, Edit2, 
+  UploadCloud, FileText, ImageIcon, Loader2, Edit2, 
   Check, X, Plus, Hash, BookOpen, FileCode, Trash2 
 } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -55,7 +53,6 @@ export function ResearchSidebar({
   projectId, 
   project, 
   latexContent,
-  onCompilerChange,
   onInsertImage,
   activeView,
   onSelectMain,
@@ -65,7 +62,6 @@ export function ResearchSidebar({
   projectId: string;
   project: any;
   latexContent: string;
-  onCompilerChange: (compiler: string) => void;
   onInsertImage: (url: string, name: string) => void;
   activeView?: { type: 'main' } | { type: 'file'; fileId: string } | { type: 'image'; imageId: string };
   onSelectMain?: () => void;
@@ -87,7 +83,6 @@ export function ResearchSidebar({
   const [editFileName, setEditFileName] = useState("");
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
 
-  const compiler = project?.compiler || 'tectonic';
   const images: ProjectImage[] = project?.images || [];
   const files: ProjectFile[] = project?.files || [];
 
@@ -100,10 +95,6 @@ export function ResearchSidebar({
     })
     .filter(Boolean) as string[];
   const displayOutline = outline.length > 0 ? outline : ["Abstract", "Introduction"];
-
-  const handleCompilerChange = (val: string) => {
-    onCompilerChange(val);
-  };
 
   const addImageMutation = useMutation({
     mutationFn: async (payload: { name: string, url: string, publicId: string } | Array<{ name: string, url: string, publicId: string }>) => {
@@ -661,42 +652,6 @@ export function ResearchSidebar({
             </AccordionContent>
           </AccordionItem>
         </Accordion>
-      </div>
-      
-      {/* Footer Settings */}
-      <div className="sticky bottom-0 border-t border-border bg-card/80 p-3 backdrop-blur-md">
-        <Dialog>
-          <DialogTrigger asChild>
-            <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-              <Settings className="size-4 text-gold/80" />
-              <span>Project Settings</span>
-            </button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Project Settings</DialogTitle>
-              <DialogDescription>
-                Configure the LaTeX compilation engine.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <label className="text-sm font-medium leading-none">Compiler Engine</label>
-                <Select value="tectonic" onValueChange={handleCompilerChange}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Tectonic (Unified Modern LaTeX)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="tectonic">Tectonic (Unified Modern LaTeX)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  GranthAstraX uses Tectonic — a unified compiler supporting standard LaTeX, XeTeX fonts, and automated package management.
-                </p>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
     </aside>
   );

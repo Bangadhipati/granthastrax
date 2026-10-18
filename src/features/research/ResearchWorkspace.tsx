@@ -405,7 +405,6 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
         projectId={projectId} 
         project={project}
         latexContent={latexContent}
-        onCompilerChange={(compiler) => saveMutation.mutate({ compiler })}
         onInsertImage={(url, name) => insertTextAtCursor(`\\includegraphics{${name}}\n`)}
         activeView={
           activeFile.type === 'main' 
