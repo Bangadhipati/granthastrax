@@ -208,13 +208,24 @@ function BookViewer3D({
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.domElement.style.touchAction = 'none';
+    renderer.domElement.style.display = 'block';
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
     mountRef.current.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 3;
-    controls.maxDistance = 15;
+    controls.enableRotate = true;
+    controls.rotateSpeed = 0.9;
+    controls.enableZoom = true;
+    controls.zoomSpeed = 1.0;
+    controls.enablePan = false; // Keep book centered while orbiting
+    controls.minDistance = 2.5;
+    controls.maxDistance = 18;
+    controls.target.set(0, 0, 0);
+    controls.update();
 
     // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
@@ -237,7 +248,15 @@ function BookViewer3D({
 
     let animId: number;
 
-    // Load Texture
+    // Animation Loop runs continuously so OrbitControls and rendering are active from frame 1
+    const animate = () => {
+      animId = requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    // Load Texture and build book meshes
     const textureLoader = new THREE.TextureLoader();
     textureLoader.load(coverUrl, (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
@@ -301,14 +320,6 @@ function BookViewer3D({
       // Center and angle the book nicely
       bookGroup.rotation.y = -Math.PI / 4;
       scene.add(bookGroup);
-
-      // Animation Loop
-      const animate = () => {
-        animId = requestAnimationFrame(animate);
-        controls.update();
-        renderer.render(scene, camera);
-      };
-      animate();
     });
 
     const handleResize = () => {
@@ -1051,70 +1062,7 @@ export function WriterView() {
             
             {/* 3D Canvas (Left 8 cols on desktop) */}
             <div className="lg:col-span-8 xl:col-span-9">
-              <Panel className="p-0 overflow-hidden relative shadow-lg">
-                {/* Small, Premium Floating HUD Pill (Top Left) */}
-                <div className="absolute top-3.5 left-3.5 flex items-center gap-2 z-10 pointer-events-none select-none">
-                  <div className="flex items-center gap-2 bg-background/80 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-border/70 shadow-sm text-[11px]">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-gold" />
-                      <span className="font-semibold text-foreground tracking-tight text-[11px]">3D Mockup</span>
-                    </div>
-                    <span className="text-border text-[10px]">|</span>
-                    <span className={`text-[10px] font-mono font-semibold uppercase px-1.5 py-0.5 rounded ${
-                      coverFinish === 'glossy' 
-                        ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' 
-                        : 'bg-secondary text-muted-foreground border border-border/60'
-                    }`}>
-                      {coverFinish}
-                    </span>
-                    <span className="text-border text-[10px]">|</span>
-                    <span className={`text-[10px] font-mono ${
-                      trimBleed ? 'text-emerald-400' : 'text-amber-400/90'
-                    }`}>
-                      {trimBleed ? `Bleed Cut (-${formatDim(bleedCutMm, unit, false)})` : 'Raw Spread'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Quick Finish Switcher (Top Right on 3D Canvas) */}
-                <div className="absolute top-3.5 right-3.5 flex items-center gap-1.5 z-10">
-                  <div className="flex items-center p-0.5 rounded-full bg-background/85 backdrop-blur-md border border-border/80 shadow-md">
-                    <button
-                      type="button"
-                      onClick={() => setCoverFinish("matte")}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
-                        coverFinish === "matte"
-                          ? "bg-gold text-black font-semibold shadow-xs"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                      title="Matte finish: velvety, non-reflective, soft-touch texture"
-                    >
-                      <Sparkles className="size-3" />
-                      <span>Matte</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCoverFinish("glossy")}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
-                        coverFinish === "glossy"
-                          ? "bg-gold text-black font-semibold shadow-xs"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                      title="Glossy finish: vibrant, high-sheen lacquer with reflective highlights"
-                    >
-                      <Sun className="size-3" />
-                      <span>Glossy</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Discreet Interaction Hint (Bottom Center) */}
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none select-none">
-                  <span className="text-[10px] text-muted-foreground/80 bg-background/60 backdrop-blur-sm px-2.5 py-0.5 rounded-full border border-border/40 font-mono tracking-tight shadow-xs">
-                    Drag to rotate • Scroll to zoom
-                  </span>
-                </div>
-                
+              <Panel className="p-0 overflow-hidden relative shadow-lg border-border/80">
                 {customCoverUrl && (
                   <Suspense fallback={<div className="w-full h-[520px] flex items-center justify-center bg-muted/20"><Loader2 className="w-8 h-8 animate-spin text-gold"/></div>}>
                     <BookViewer3D 
