@@ -5,8 +5,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
-interface ProjectImage {
+export interface ProjectImage {
   _id: string;
   name: string;
   url: string;
@@ -18,13 +19,19 @@ export function ResearchSidebar({
   project, 
   latexContent,
   onCompilerChange,
-  onInsertImage
+  onInsertImage,
+  activeView,
+  onSelectMain,
+  onSelectImage,
 }: { 
   projectId: string;
   project: any;
   latexContent: string;
   onCompilerChange: (compiler: string) => void;
   onInsertImage: (url: string, name: string) => void;
+  activeView?: { type: 'main' } | { type: 'image'; imageId: string };
+  onSelectMain?: () => void;
+  onSelectImage?: (image: ProjectImage) => void;
 }) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -169,7 +176,15 @@ export function ResearchSidebar({
             </AccordionTrigger>
             <AccordionContent className="pb-4 pt-1">
               <ul className="space-y-1">
-                <li className="flex cursor-pointer items-center gap-2 rounded-md bg-secondary/60 px-2 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary hover:text-foreground">
+                <li 
+                  onClick={onSelectMain}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-all duration-200 border",
+                    activeView?.type === 'main'
+                      ? "bg-gold/15 text-gold border-gold/40 font-semibold shadow-sm"
+                      : "bg-secondary/40 text-foreground border-transparent hover:bg-secondary hover:text-foreground"
+                  )}
+                >
                   <FileText className="size-3.5" />
                   <span>main.tex</span>
                 </li>
@@ -215,68 +230,84 @@ export function ResearchSidebar({
               </button>
 
               <ul className="space-y-2">
-                {images.map((img) => (
-                  <li key={img._id} className="group flex flex-col gap-1 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-secondary/40">
-                    {editingImageId === img._id ? (
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="text"
-                          value={editImageName}
-                          onChange={(e) => setEditImageName(e.target.value)}
-                          className="w-full bg-background border border-border rounded px-1 py-0.5 text-xs text-foreground focus:outline-none focus:border-gold"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveEditing(img._id);
-                            if (e.key === 'Escape') setEditingImageId(null);
-                          }}
-                        />
-                        <button onClick={() => saveEditing(img._id)} className="text-green-500 hover:text-green-400 p-0.5"><Check className="size-3" /></button>
-                        <button onClick={() => setEditingImageId(null)} className="text-red-500 hover:text-red-400 p-0.5"><X className="size-3" /></button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 overflow-hidden flex-1">
-                          <a 
-                            href={img.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="size-5 rounded overflow-hidden shrink-0 border border-border hover:border-gold transition-colors inline-flex items-center justify-center cursor-pointer"
-                            title="View full image in new tab"
-                          >
-                            <img src={img.url} alt={img.name} className="size-full object-cover" />
-                          </a>
-                          <span className="truncate text-muted-foreground select-text" title={img.name}>{img.name}</span>
+                {images.map((img) => {
+                  const isSelected = activeView?.type === 'image' && activeView.imageId === img._id;
+                  return (
+                    <li 
+                      key={img._id} 
+                      onClick={() => onSelectImage?.(img)}
+                      className={cn(
+                        "group flex flex-col gap-1 rounded-md px-2 py-1.5 text-xs transition-all duration-200 cursor-pointer border",
+                        isSelected
+                          ? "bg-gold/15 text-gold border-gold/40 font-medium shadow-sm"
+                          : "border-transparent hover:bg-secondary/40 text-foreground"
+                      )}
+                    >
+                      {editingImageId === img._id ? (
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="text"
+                            value={editImageName}
+                            onChange={(e) => setEditImageName(e.target.value)}
+                            className="w-full bg-background border border-border rounded px-1 py-0.5 text-xs text-foreground focus:outline-none focus:border-gold"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveEditing(img._id);
+                              if (e.key === 'Escape') setEditingImageId(null);
+                            }}
+                          />
+                          <button onClick={() => saveEditing(img._id)} className="text-green-500 hover:text-green-400 p-0.5"><Check className="size-3" /></button>
+                          <button onClick={() => setEditingImageId(null)} className="text-red-500 hover:text-red-400 p-0.5"><X className="size-3" /></button>
                         </div>
-                        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            type="button"
-                            onClick={() => onInsertImage(img.url, img.name)} 
-                            className="p-1 text-muted-foreground hover:text-gold" 
-                            title="Insert \includegraphics code at cursor"
-                          >
-                            <Plus className="size-3" />
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => startEditing(img)} 
-                            className="p-1 text-muted-foreground hover:text-foreground" 
-                            title="Rename"
-                          >
-                            <Edit2 className="size-3" />
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => deleteImageMutation.mutate(img._id)} 
-                            className="p-1 text-muted-foreground hover:text-red-500" 
-                            title="Delete"
-                          >
-                            <X className="size-3" />
-                          </button>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 overflow-hidden flex-1">
+                            <div 
+                              className={cn(
+                                "size-5 rounded overflow-hidden shrink-0 border transition-colors inline-flex items-center justify-center bg-black/40",
+                                isSelected ? "border-gold" : "border-border"
+                              )}
+                            >
+                              <img src={img.url} alt={img.name} className="size-full object-cover" />
+                            </div>
+                            <span 
+                              className={cn("truncate select-text", isSelected ? "text-gold font-medium" : "text-muted-foreground")} 
+                              title={img.name}
+                            >
+                              {img.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                            <button 
+                              type="button"
+                              onClick={() => onInsertImage(img.url, img.name)} 
+                              className="p-1 text-muted-foreground hover:text-gold" 
+                              title="Insert \includegraphics code at cursor"
+                            >
+                              <Plus className="size-3" />
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => startEditing(img)} 
+                              className="p-1 text-muted-foreground hover:text-foreground" 
+                              title="Rename"
+                            >
+                              <Edit2 className="size-3" />
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => deleteImageMutation.mutate(img._id)} 
+                              className="p-1 text-muted-foreground hover:text-red-500" 
+                              title="Delete"
+                            >
+                              <X className="size-3" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </li>
-                ))}
+                      )}
+                    </li>
+                  );
+                })}
                 {images.length === 0 && !isUploading && (
                   <li className="text-[10px] text-muted-foreground/60 text-center py-2">No images uploaded</li>
                 )}

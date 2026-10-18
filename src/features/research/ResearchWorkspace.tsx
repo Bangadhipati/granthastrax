@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { EditorShell } from "@/components/layout/EditorShell";
-import { ResearchSidebar } from "./ResearchSidebar";
+import { ResearchSidebar, type ProjectImage } from "./ResearchSidebar";
 import { PdfViewer, type CompilationErrorInfo } from "./PdfViewer";
 import { ShareModal } from "./ShareModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { getProjectPdf, saveProjectPdf, removeProjectPdf } from "@/lib/pdfCache";
+import { cn } from "@/lib/utils";
 import { 
   Loader2, Play, ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
-  ArrowLeft, Download
+  ArrowLeft, Download, FileText, ImageIcon, ExternalLink, Copy, Check, X, Plus
 } from "lucide-react";
 import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
@@ -89,6 +90,39 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
   
   const editorRef = useRef<ReactCodeMirrorRef>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
+
+  const [activeFile, setActiveFile] = useState<
+    { type: 'main' } | { type: 'image'; image: ProjectImage }
+  >({ type: 'main' });
+  const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number } | null>(null);
+  const [imageCopied, setImageCopied] = useState(false);
+
+  // If the active image was deleted from the project, return to main.tex
+  useEffect(() => {
+    if (activeFile.type === 'image') {
+      const exists = project?.images?.some((img: ProjectImage) => img._id === activeFile.image._id);
+      if (project && !exists) {
+        setActiveFile({ type: 'main' });
+      }
+    }
+  }, [project?.images, activeFile]);
+
+  const handleSelectImage = (image: ProjectImage) => {
+    setImageNaturalSize(null);
+    setImageCopied(false);
+    setActiveFile({ type: 'image', image });
+  };
+
+  const handleSelectMain = () => {
+    setActiveFile({ type: 'main' });
+  };
+
+  const handleInsertImageFromPreview = (imageName: string) => {
+    setActiveFile({ type: 'main' });
+    setTimeout(() => {
+      insertTextAtCursor(`\\includegraphics{${imageName}}\n`);
+    }, 50);
+  };
 
   const handlePageChange = (newPage: number) => {
     setPageNumber(newPage);
@@ -285,6 +319,9 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
         latexContent={latexContent}
         onCompilerChange={(compiler) => saveMutation.mutate({ compiler })}
         onInsertImage={(url, name) => insertTextAtCursor(`\\includegraphics{${name}}\n`)}
+        activeView={activeFile.type === 'main' ? { type: 'main' } : { type: 'image', imageId: activeFile.image._id }}
+        onSelectMain={handleSelectMain}
+        onSelectImage={handleSelectImage}
       />
 
       {/* Main Workspace Area */}
@@ -338,20 +375,72 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
         {/* Resizable Split Canvas */}
         <div className="h-full flex-1 overflow-hidden">
           <ResizablePanelGroup orientation="horizontal">
-            {/* LaTeX Source Pane */}
+            {/* LaTeX Source / Image Preview Pane */}
             <ResizablePanel defaultSize={50} minSize={20} className="flex h-full flex-col bg-[#0a0a0a]">
-              <div className="flex shrink-0 items-center justify-between border-b border-border bg-background/40 px-4 py-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                <span>LaTeX Code (main.tex)</span>
+              {/* Tab Header Bar */}
+              <div className="flex shrink-0 items-center justify-between border-b border-border bg-background/50 px-2 py-1 text-xs">
+                <div className="flex items-center gap-1 overflow-x-auto">
+                  {/* main.tex Tab */}
+                  <button
+                    type="button"
+                    onClick={handleSelectMain}
+                    className={cn(
+                      "flex items-center gap-2 rounded px-2.5 py-1 text-xs font-medium transition-all duration-200 border",
+                      activeFile.type === 'main'
+                        ? "bg-secondary text-gold border-gold/40 shadow-sm font-semibold"
+                        : "text-muted-foreground border-transparent hover:bg-secondary/50 hover:text-foreground"
+                    )}
+                  >
+                    <FileText className="size-3.5" />
+                    <span>main.tex</span>
+                  </button>
+
+                  {/* Selected Image Tab */}
+                  {activeFile.type === 'image' && (
+                    <div
+                      className="flex items-center gap-2 rounded px-2.5 py-1 text-xs font-medium bg-secondary text-gold border border-gold/40 shadow-sm animate-in fade-in zoom-in-95 duration-150"
+                    >
+                      <ImageIcon className="size-3.5" />
+                      <span className="max-w-[140px] truncate" title={activeFile.image.name}>{activeFile.image.name}</span>
+                      <button
+                        type="button"
+                        onClick={handleSelectMain}
+                        className="p-0.5 rounded hover:bg-background/80 text-muted-foreground hover:text-foreground transition-colors"
+                        title="Close preview and return to main.tex"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {activeFile.type === 'main' ? (
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground px-2">
+                    LaTeX Editor
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSelectMain}
+                    className="inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:text-gold hover:bg-secondary/60 transition-colors"
+                  >
+                    <FileText className="size-3" />
+                    <span>Back to Code</span>
+                  </button>
+                )}
               </div>
-              <div 
-                className="flex-1 overflow-hidden relative"
-                onWheel={(e) => {
-                  if (e.ctrlKey || e.metaKey) {
-                    setLatexZoom((z) => Math.min(Math.max(0.5, z - e.deltaY * 0.001), 3));
-                  }
-                }}
-              >
-                <CodeMirror
+
+              {/* Active Content: CodeMirror Editor or Image Preview */}
+              {activeFile.type === 'main' ? (
+                <div 
+                  className="flex-1 overflow-hidden relative"
+                  onWheel={(e) => {
+                    if (e.ctrlKey || e.metaKey) {
+                      setLatexZoom((z) => Math.min(Math.max(0.5, z - e.deltaY * 0.001), 3));
+                    }
+                  }}
+                >
+                  <CodeMirror
                     ref={editorRef}
                     value={latexContent}
                     theme="dark"
@@ -366,7 +455,91 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
                       dropCursor: true,
                     }}
                   />
-              </div>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col overflow-hidden bg-[#0c0d0e]">
+                  {/* Image Preview Toolbar */}
+                  <div className="flex items-center justify-between border-b border-border/60 bg-background/30 px-4 py-2 text-xs">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <ImageIcon className="size-4 text-gold shrink-0" />
+                      <span className="font-semibold text-foreground truncate" title={activeFile.image.name}>
+                        {activeFile.image.name}
+                      </span>
+                      {imageNaturalSize && (
+                        <span className="text-[11px] text-muted-foreground/80 font-mono shrink-0">
+                          ({imageNaturalSize.width} × {imageNaturalSize.height} px)
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleInsertImageFromPreview(activeFile.image.name)}
+                        className="inline-flex items-center gap-1.5 rounded bg-gold px-2.5 py-1 text-xs font-semibold text-black hover:bg-gold/90 transition-all active:scale-95 shadow-sm"
+                        title="Insert \includegraphics into LaTeX code"
+                      >
+                        <Plus className="size-3.5" />
+                        <span>Insert in LaTeX</span>
+                      </button>
+
+                      <a
+                        href={activeFile.image.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded bg-secondary px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary/80 transition-colors"
+                        title="Open full image in new tab"
+                      >
+                        <ExternalLink className="size-3.5" />
+                        <span>Open Original</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Main Image Canvas */}
+                  <div className="flex-1 overflow-auto p-6 flex flex-col items-center justify-center relative bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px]">
+                    <div className="max-w-full max-h-full flex items-center justify-center p-3 rounded-xl bg-black/50 border border-border/50 shadow-2xl backdrop-blur-sm">
+                      <img
+                        src={activeFile.image.url}
+                        alt={activeFile.image.name}
+                        onLoad={(e) => {
+                          const img = e.currentTarget;
+                          setImageNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
+                        }}
+                        className="max-h-[58vh] max-w-full object-contain rounded-lg shadow-md"
+                      />
+                    </div>
+
+                    {/* LaTeX Code Quick Snippet */}
+                    <div className="mt-5 flex items-center gap-2.5 rounded-lg bg-black/80 border border-border/60 px-3.5 py-2 text-xs font-mono text-zinc-300 shadow-md">
+                      <span className="text-muted-foreground select-none">LaTeX:</span>
+                      <code className="text-gold select-all font-semibold">{`\\includegraphics{${activeFile.image.name}}`}</code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`\\includegraphics{${activeFile.image.name}}`);
+                          setImageCopied(true);
+                          setTimeout(() => setImageCopied(false), 2000);
+                        }}
+                        className="ml-2 inline-flex items-center gap-1 rounded bg-zinc-800/80 px-2 py-0.5 text-[11px] text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors"
+                        title="Copy LaTeX code"
+                      >
+                        {imageCopied ? (
+                          <>
+                            <Check className="size-3 text-emerald-400" />
+                            <span className="text-emerald-400 font-semibold">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="size-3" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </ResizablePanel>
 
             <ResizableHandle withHandle className="bg-border hover:bg-gold/50 transition-colors z-10 w-1" />
