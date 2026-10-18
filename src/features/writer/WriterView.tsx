@@ -88,8 +88,14 @@ function setPlaneUVs(
   uv.needsUpdate = true;
 }
 
-// Helper to create a procedural default cover texture if user hasn't uploaded one or while loading
-function createDefaultCoverTexture(title: string, author: string, width = 1024, height = 768) {
+// Helper to create an ultra-sharp procedural default cover texture with 16x anisotropy
+function createDefaultCoverTexture(
+  title: string, 
+  author: string, 
+  width = 2048, 
+  height = 1536,
+  anisotropy = 16
+) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -106,58 +112,68 @@ function createDefaultCoverTexture(title: string, author: string, width = 1024, 
 
   // Decorative border
   ctx.strokeStyle = '#d4af37';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(24, 24, width - 48, height - 48);
+  ctx.lineWidth = 8;
+  ctx.strokeRect(48, 48, width - 96, height - 96);
 
   // Thin inner border
   ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(36, 36, width - 72, height - 72);
+  ctx.lineWidth = 3;
+  ctx.strokeRect(72, 72, width - 144, height - 144);
 
   // Spine separator guide line (dashed)
   ctx.strokeStyle = 'rgba(212, 175, 55, 0.35)';
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([8, 8]);
+  ctx.lineWidth = 3;
+  ctx.setLineDash([16, 16]);
   ctx.beginPath();
-  ctx.moveTo(width / 2, 24);
-  ctx.lineTo(width / 2, height - 24);
+  ctx.moveTo(width / 2, 48);
+  ctx.lineTo(width / 2, height - 48);
   ctx.stroke();
   ctx.setLineDash([]);
 
   // Front cover side: Title
   ctx.fillStyle = '#f5f5f7';
-  ctx.font = 'bold 36px sans-serif';
+  ctx.font = 'bold 72px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const displayTitle = title.length > 24 ? title.substring(0, 22) + '...' : (title || 'GranthAstraX Book');
-  ctx.fillText(displayTitle, (width * 3) / 4, height / 2 - 40);
+  ctx.fillText(displayTitle, (width * 3) / 4, height / 2 - 80);
 
   // Front cover side: Author
   ctx.fillStyle = '#d4af37';
-  ctx.font = '500 22px sans-serif';
+  ctx.font = '500 44px sans-serif';
   const displayAuthor = author ? `by ${author}` : 'Precision Studio Edition';
-  ctx.fillText(displayAuthor, (width * 3) / 4, height / 2 + 25);
+  ctx.fillText(displayAuthor, (width * 3) / 4, height / 2 + 50);
 
   // Spine text
   ctx.save();
   ctx.translate(width / 2, height / 2);
   ctx.rotate(-Math.PI / 2);
   ctx.fillStyle = 'rgba(212, 175, 55, 0.7)';
-  ctx.font = '600 16px sans-serif';
+  ctx.font = '600 32px sans-serif';
   ctx.fillText(displayTitle, 0, 0);
   ctx.restore();
 
   // Back cover hint
   ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-  ctx.font = '16px sans-serif';
+  ctx.font = '32px sans-serif';
   ctx.fillText('Back Cover', width / 4, height / 2);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  // 16x Anisotropic filtering ensures razor-sharp text and borders even when angled or zoomed in
+  texture.anisotropy = anisotropy;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
   return texture;
 }
 
-function loadCoverTexture(url: string, onLoad: (texture: THREE.CanvasTexture, aspect: number) => void) {
+// Dedicated rock-solid image loader with 16x Anisotropic filtering & High-Def supersampling
+function loadCoverTexture(
+  url: string, 
+  onLoad: (texture: THREE.CanvasTexture, aspect: number) => void,
+  anisotropy = 16
+) {
   const img = new Image();
   // CRITICAL: Only set crossOrigin for remote HTTP(S) links, NEVER for data: or blob: URLs
   if (url.startsWith('http://') || url.startsWith('https://')) {
@@ -168,16 +184,35 @@ function loadCoverTexture(url: string, onLoad: (texture: THREE.CanvasTexture, as
     if (isDone) return;
     if (!img.naturalWidth || !img.naturalHeight) return;
     isDone = true;
+
+    const natW = img.naturalWidth;
+    const natH = img.naturalHeight;
+    const aspect = natW / natH;
+
+    // Ultra-sharp supersampling: ensure at least 2560px on the longest dimension
+    // If the image is already higher-resolution (e.g., 4K print export), preserve full native resolution!
+    const targetMinLongEdge = 2560;
+    const scale = Math.max(1, targetMinLongEdge / Math.max(natW, natH));
+    const targetW = Math.round(natW * scale);
+    const targetH = Math.round(natH * scale);
+
     const canvas = document.createElement('canvas');
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext('2d');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d', { willReadFrequently: false });
     if (ctx) {
-      ctx.drawImage(img, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, targetW, targetH);
+
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
+      // High Anisotropy (16x) completely eliminates perspective and zoom blur
+      texture.anisotropy = anisotropy;
+      texture.generateMipmaps = true;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
       texture.needsUpdate = true;
-      const aspect = canvas.width / canvas.height;
       onLoad(texture, aspect);
     }
   };
@@ -228,6 +263,7 @@ function BookViewer3D({
   const bookGroupRef = useRef<THREE.Group | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
   const [isAutoRotating, setIsAutoRotating] = useState(false);
   const autoRotateRef = useRef(false);
@@ -312,9 +348,21 @@ function BookViewer3D({
     camera.position.set(0, 1.2, 7.5);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      alpha: true,
+      powerPreference: 'high-performance'
+    });
     renderer.setSize(containerW, containerH);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Supersample pixel ratio for crystal-clear texture resolution when zooming in:
+    const dpr = Math.max(window.devicePixelRatio || 1, 2);
+    renderer.setPixelRatio(Math.min(dpr, 3));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    rendererRef.current = renderer;
+
+    const maxAnisotropy = renderer.capabilities.getMaxAnisotropy() || 16;
+
     renderer.domElement.style.touchAction = 'none';
     renderer.domElement.style.userSelect = 'none';
     renderer.domElement.style.display = 'block';
@@ -359,8 +407,8 @@ function BookViewer3D({
     scene.add(specLight);
     specLightRef.current = specLight;
 
-    // Base Material: Start with default procedural texture
-    const initialTexture = createDefaultCoverTexture(title, author);
+    // Base Material: Start with default procedural texture with 16x anisotropy
+    const initialTexture = createDefaultCoverTexture(title, author, 2048, 1536, maxAnisotropy);
     const isGlossy = finish === "glossy";
     const coverMaterial = new THREE.MeshPhysicalMaterial({ 
       map: initialTexture, 
@@ -422,7 +470,7 @@ function BookViewer3D({
     bookGroup.rotation.y = -0.35;
     scene.add(bookGroup);
 
-    // If an initial coverUrl is already present on mount, load it immediately
+    // If an initial coverUrl is already present on mount, load it immediately with 16x anisotropy
     if (coverUrl) {
       loadCoverTexture(coverUrl, (tex, aspect) => {
         if (coverMaterial.map && coverMaterial.map !== tex) {
@@ -434,7 +482,7 @@ function BookViewer3D({
           geosRef.current.imageAspect = aspect;
           updateUVs(aspect, geosRef.current);
         }
-      });
+      }, maxAnisotropy);
     }
 
     let animId: number;
@@ -489,6 +537,7 @@ function BookViewer3D({
       geosRef.current = null;
       materialRef.current = null;
       specLightRef.current = null;
+      rendererRef.current = null;
       if (currentMount && renderer.domElement.parentNode === currentMount) {
         currentMount.removeChild(renderer.domElement);
       }
@@ -523,6 +572,8 @@ function BookViewer3D({
   useEffect(() => {
     if (!materialRef.current || !geosRef.current) return;
 
+    const maxAnis = rendererRef.current?.capabilities.getMaxAnisotropy() || 16;
+
     if (coverUrl) {
       loadCoverTexture(coverUrl, (tex, aspect) => {
         if (materialRef.current && geosRef.current) {
@@ -534,9 +585,9 @@ function BookViewer3D({
           geosRef.current.imageAspect = aspect;
           updateUVs(aspect, geosRef.current);
         }
-      });
+      }, maxAnis);
     } else {
-      const defTex = createDefaultCoverTexture(title, author);
+      const defTex = createDefaultCoverTexture(title, author, 2048, 1536, maxAnis);
       if (defTex && materialRef.current && geosRef.current) {
         if (materialRef.current.map && materialRef.current.map !== defTex) {
           materialRef.current.map.dispose();
