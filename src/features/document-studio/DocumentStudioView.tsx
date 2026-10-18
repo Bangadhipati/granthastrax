@@ -15,8 +15,24 @@ import { DocumentStudioSkeleton } from "@/components/ui/page-skeletons";
 import { api } from "@/lib/api";
 
 // ── Supported formats ────────────────────────────────────────────────────────
-const CONVERT_FORMATS = ["PDF", "HTML", "TXT"];
-const SUPPORTED_INPUT = ["pdf", "docx", "txt", "html", "htm", "rtf"];
+interface FormatOption {
+  value: string;
+  label: string;
+  ext: string;
+  desc: string;
+}
+
+const CONVERT_FORMATS: FormatOption[] = [
+  { value: "PDF", label: "PDF — Vector Print Document", ext: "pdf", desc: "High-fidelity vector PDF with typography margins" },
+  { value: "DOCX", label: "Word — Microsoft Word (.docx)", ext: "docx", desc: "Native editable Microsoft Word manuscript" },
+  { value: "EPUB", label: "EPUB — Reflowable eBook (.epub)", ext: "epub", desc: "Standard eBook for Kindle, Apple Books & Kobo" },
+  { value: "MD", label: "Markdown — GitHub Flavored (.md)", ext: "md", desc: "Clean markdown headings, code blocks & lists" },
+  { value: "HTML", label: "HTML5 — Responsive Web Page (.html)", ext: "html", desc: "Standalone styled document with print CSS" },
+  { value: "TXT", label: "Plain Text — Clean Unicode (.txt)", ext: "txt", desc: "Stripped clean plain text" },
+];
+
+const SUPPORTED_INPUT = ["pdf", "docx", "md", "markdown", "tex", "latex", "txt", "html", "htm", "rtf"];
+const DISPLAY_BADGES = ["pdf", "docx", "md", "tex", "html", "txt", "rtf"];
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface JobRecord {
@@ -157,14 +173,18 @@ export function DocumentStudioView() {
     setFile(selected);
 
     // Smart default target format based on uploaded file
-    if (ext === "docx") {
+    if (ext === "pdf") {
+      setTargetFormat("DOCX");
+    } else if (ext === "docx") {
       setTargetFormat("PDF");
-    } else if (ext === "pdf") {
+    } else if (ext === "md" || ext === "markdown") {
       setTargetFormat("PDF");
-      // If uploading PDF, encourage compression or print expansion
-      if (!compressEnabled && !expandEnabled) {
-        setCompressEnabled(true);
-      }
+    } else if (ext === "tex" || ext === "latex") {
+      setTargetFormat("PDF");
+    } else if (ext === "html" || ext === "htm") {
+      setTargetFormat("PDF");
+    } else if (ext === "txt" || ext === "rtf") {
+      setTargetFormat("PDF");
     }
   };
 
@@ -336,7 +356,7 @@ export function DocumentStudioView() {
                     <div>
                       {fileExt === "PDF" && (
                         <span>
-                          PDF input ready. Use <strong className="text-foreground">Compress</strong> to target portal upload thresholds or <strong className="text-foreground">Expand for print</strong> to calibrate raster DPI metadata.
+                          PDF loaded. You can extract &amp; convert into <strong className="text-foreground">Word (.docx)</strong>, <strong className="text-foreground">Markdown (.md)</strong>, <strong className="text-foreground">EPUB</strong>, or apply <strong className="text-foreground">Compression</strong> &amp; <strong className="text-foreground">Print DPI</strong> metadata.
                         </span>
                       )}
                       {fileExt === "DOCX" && (
@@ -344,14 +364,24 @@ export function DocumentStudioView() {
                           Microsoft Word document detected. GranthAstraX preserves headings, typography, tables, and spacing during conversion to <strong className="text-foreground">{targetFormat}</strong>.
                         </span>
                       )}
+                      {(fileExt === "MD" || fileExt === "MARKDOWN") && (
+                        <span>
+                          Markdown manuscript detected. Converts into <strong className="text-foreground">Vector PDF</strong>, native <strong className="text-foreground">Word (.docx)</strong>, or reflowable <strong className="text-foreground">EPUB 3.0 eBook</strong> with styled typography.
+                        </span>
+                      )}
+                      {(fileExt === "TEX" || fileExt === "LATEX") && (
+                        <span>
+                          LaTeX document detected. Parses environments, sections, and formulas into <strong className="text-foreground">Vector PDF</strong>, <strong className="text-foreground">Word (.docx)</strong>, or <strong className="text-foreground">EPUB</strong>.
+                        </span>
+                      )}
                       {(fileExt === "HTML" || fileExt === "HTM") && (
                         <span>
-                          Web markup loaded. Converts directly into publication-grade PDF with CSS layout fidelity.
+                          Web markup loaded. Converts directly into publication-grade <strong className="text-foreground">PDF</strong>, <strong className="text-foreground">Word (.docx)</strong>, or <strong className="text-foreground">Markdown (.md)</strong> with CSS layout fidelity.
                         </span>
                       )}
                       {(fileExt === "TXT" || fileExt === "RTF") && (
                         <span>
-                          Plain text source ready for structured PDF typesetting and archiving.
+                          Plain text source ready for structured <strong className="text-foreground">PDF</strong>, <strong className="text-foreground">Word (.docx)</strong>, or <strong className="text-foreground">EPUB</strong> typesetting.
                         </span>
                       )}
                     </div>
@@ -378,7 +408,7 @@ export function DocumentStudioView() {
                   </p>
 
                   <div className="mt-4 flex flex-wrap items-center justify-center gap-1.5">
-                    {SUPPORTED_INPUT.map(fmt => (
+                    {DISPLAY_BADGES.map(fmt => (
                       <span key={fmt} className="px-2 py-0.5 rounded text-[10px] font-mono font-medium uppercase bg-secondary/80 text-muted-foreground border border-border">
                         .{fmt}
                       </span>
@@ -510,10 +540,10 @@ export function DocumentStudioView() {
                 <Panel className="p-4 border border-border/80 bg-card/40">
                   <div className="flex items-center gap-2 mb-1.5 text-gold">
                     <Repeat className="size-4" />
-                    <h4 className="text-xs font-semibold text-foreground">Layout Fidelity</h4>
+                    <h4 className="text-xs font-semibold text-foreground">Universal Conversion</h4>
                   </div>
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Preserves styles, tables, headings, and formatting when converting DOCX and HTML into PDF.
+                    Cross-converts PDF, Word (.docx), EPUB eBooks, Markdown, LaTeX, and HTML with high typography fidelity.
                   </p>
                 </Panel>
 
@@ -566,13 +596,20 @@ export function DocumentStudioView() {
                     <span className="font-mono text-gold font-semibold">.{targetFormat.toLowerCase()}</span>
                   </div>
                   <Select value={targetFormat} onValueChange={setTargetFormat}>
-                    <SelectTrigger className="w-full h-9 text-xs">
+                    <SelectTrigger className="w-full h-10 text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {CONVERT_FORMATS.map(f => (
-                        <SelectItem key={f} value={f} className="text-xs font-mono">
-                          {f} {f === "PDF" ? "— Portable Document Format" : f === "HTML" ? "— Web Markup" : "— Plain Text"}
+                        <SelectItem key={f.value} value={f.value} className="text-xs py-1.5 cursor-pointer">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-medium text-foreground">
+                              {f.label}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground font-sans">
+                              {f.desc}
+                            </span>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
