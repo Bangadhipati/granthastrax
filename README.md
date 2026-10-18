@@ -83,13 +83,15 @@ A specialized workstation for print book manufacturing, cover blueprint generati
 
 ---
 
-### 3. Document Studio (Universal Document Conversion)
+### 3. Document Studio (Universal Cross-Format Conversion Engine)
 
-A client-and-server document processing utility:
+A high-performance document engineering workstation supporting bidirectional conversions across publishing, academic, and office formats:
 
-- **Cross-Format Conversion**: Convert between `DOCX`, `PDF`, `HTML`, `Markdown`, and plain `TXT`.
-- **Document Optimization & Compression**: Reduce file sizes for sharing or archival using `pdf-lib` and `mammoth`.
-- **Instant Client-Side & Backend Processing**: Drag-and-drop batch processing with tabular conversion status.
+- **Universal Format Matrix**: Full cross-conversion between **PDF**, **DOCX (Microsoft Word)**, **EPUB 3.0 (Reflowable eBooks)**, **Markdown (.md)**, **LaTeX (.tex)**, **HTML5**, and plain **TXT / RTF**.
+- **Native Word & eBook Compilation**: Builds styled, editable `.docx` manuscripts using `docx` AST primitives and valid EPUB 3.0 packages with OPF metadata, NCX navigation, and embedded CSS typography.
+- **PDF Layout & Structural Extraction**: Reverse-engineers compiled PDFs into editable Word documents, clean Markdown, and structured text via `pdf-parse`.
+- **Stream Compaction & Print Intent**: Reduces PDF byte sizes with object stream deduplication (`pdf-lib`) and embeds up to 600 DPI raster calibration intent for print-on-demand presses.
+- **5-Minute Ephemeral Lifecycle**: Automatic in-memory session registry and live countdown timer that auto-purges generated assets after 5 minutes for privacy and storage efficiency.
 
 ---
 
@@ -100,6 +102,14 @@ A media engineering utility powered by Libvips:
 - **Format Transcoding**: High-speed conversion between `PNG`, `JPEG`, `WebP`, `AVIF`, `TIFF`, and `PDF`.
 - **Raster-to-Vector Tracing**: Convert bitmap images to scalable vector graphics (`SVG`) via `imagetracerjs`.
 - **Lossless & Lossy Compression**: Fine-tune compression levels, dimensions, and quality presets for web delivery or print resolution (300 DPI).
+- **Persistent Working Session**: 5-minute server-backed session cache with live countdown timer and automatic orphan sweepers, ensuring zero data loss during accidental browser refreshes.
+
+---
+
+### 5. Luxury Obsidian & Champagne Gold Design System
+
+- **Glassmorphism & Oklch Palettes**: Hand-tuned dark and light themes utilizing high-contrast obsidian depth and metallic champagne gold highlights (`#d4af37`).
+- **60 FPS Skeleton Shimmer**: Responsive skeleton loading states across all views (Home, Research Studio, Writer Desk with dual-layer 3D viewport skeleton, Document Studio, and Image Studio) eliminating layout shifts.
 
 ---
 
@@ -220,9 +230,13 @@ flowchart TD
   <img src="https://img.shields.io/badge/Sharp_Libvips-990000?style=for-the-badge&logo=sharp&logoColor=white" alt="Sharp" />
   <img src="https://img.shields.io/badge/PDFKit-E0234E?style=for-the-badge&logo=adobeacrobatreader&logoColor=white" alt="PDFKit" />
   <img src="https://img.shields.io/badge/pdf--lib-E0234E?style=for-the-badge&logo=adobeacrobatreader&logoColor=white" alt="pdf-lib" />
+  <img src="https://img.shields.io/badge/pdf--parse-E0234E?style=for-the-badge&logo=adobeacrobatreader&logoColor=white" alt="pdf-parse" />
   <img src="https://img.shields.io/badge/Puppeteer_Chromium-40B5A4?style=for-the-badge&logo=puppeteer&logoColor=white" alt="Puppeteer" />
   <img src="https://img.shields.io/badge/Mammoth.js-4285F4?style=for-the-badge&logo=googledocs&logoColor=white" alt="Mammoth" />
-  <img src="https://img.shields.io/badge/adm--zip-FF6F00?style=for-the-badge&logo=archive&logoColor=white" alt="adm-zip" />
+  <img src="https://img.shields.io/badge/docx-0055FF?style=for-the-badge&logo=microsoftword&logoColor=white" alt="docx" />
+  <img src="https://img.shields.io/badge/adm--zip_EPUB-FF6F00?style=for-the-badge&logo=archive&logoColor=white" alt="adm-zip" />
+  <img src="https://img.shields.io/badge/Marked.js-000000?style=for-the-badge&logo=markdown&logoColor=white" alt="Marked" />
+  <img src="https://img.shields.io/badge/Turndown-4285F4?style=for-the-badge&logo=html5&logoColor=white" alt="Turndown" />
 </p>
 
 ### ☁️ Cloud, Security & Infrastructure
@@ -245,7 +259,7 @@ flowchart TD
 | **Type System** | [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) | End-to-end static type safety |
 | **Build Tooling** | [![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/) | Sub-millisecond HMR and optimized production bundling |
 | **Routing & Cache** | [![TanStack](https://img.shields.io/badge/TanStack_Router_%26_Query-FF4154?style=flat-square&logo=react-table&logoColor=white)](https://tanstack.com/) | 100% type-safe client-side routing & asynchronous cache |
-| **Styling & Design** | [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_v4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/) [![Radix UI](https://img.shields.io/badge/Radix_UI-161618?style=flat-square&logo=radix-ui&logoColor=white)](https://www.radix-ui.com/) | Luxury glassmorphic styling & accessible primitive components |
+| **Styling & Design** | [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_v4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/) [![Radix UI](https://img.shields.io/badge/Radix_UI-161618?style=flat-square&logo=radix-ui&logoColor=white)](https://www.radix-ui.com/) | Luxury glassmorphic styling, obsidian depth & accessible primitives |
 | **3D Rendering** | [![Three.js](https://img.shields.io/badge/Three.js-000000?style=flat-square&logo=three.js&logoColor=white)](https://threejs.org/) | WebGL physically-based book simulation (Glossy/Matte PBR) |
 | **Rich Text Editor** | [![TipTap](https://img.shields.io/badge/TipTap-222222?style=flat-square&logo=markdown&logoColor=white)](https://tiptap.dev/) | Headless WYSIWYG document editor with real-time AST export |
 | **Code Editor** | [![CodeMirror](https://img.shields.io/badge/CodeMirror_6-D32F2F?style=flat-square&logo=codemirror&logoColor=white)](https://codemirror.net/) | Syntax-highlighted live LaTeX editing environment |
@@ -254,6 +268,7 @@ flowchart TD
 | **LaTeX Engine** | [![Tectonic](https://img.shields.io/badge/Tectonic_LaTeX-008080?style=flat-square&logo=latex&logoColor=white)](https://tectonic-typesetting.github.io/) | Self-contained, on-demand Rust LaTeX compiler in Docker |
 | **Media Processing** | [![Sharp](https://img.shields.io/badge/Sharp_Libvips-990000?style=flat-square&logo=sharp&logoColor=white)](https://sharp.pixelplumbing.com/) | Multi-threaded image transcoding, vectorization & compression |
 | **PDF Engineering** | [![PDFKit](https://img.shields.io/badge/PDFKit_%26_pdf--lib-E0234E?style=flat-square&logo=adobeacrobatreader&logoColor=white)](https://pdfkit.org/) | Vector print template blueprint generation with bleed/safe zones |
+| **Universal Conversion** | [![docx](https://img.shields.io/badge/docx_%26_pdf--parse-0055FF?style=flat-square&logo=microsoftword&logoColor=white)](https://docx.js.org/) [![Turndown](https://img.shields.io/badge/Marked_%26_Turndown-4285F4?style=flat-square&logo=markdown&logoColor=white)](https://marked.js.org/) | Cross-format conversion across PDF, DOCX, EPUB, LaTeX, MD, HTML |
 | **Barcode Engine** | [![bwip-js](https://img.shields.io/badge/bwip--js-1A1A1A?style=flat-square&logo=barcode&logoColor=white)](https://github.com/metafloor/bwip-js) | GS1 / BISG Bookland EAN-13 + EAN-5 retail barcode generation |
 | **Container & Cloud** | [![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/) [![Render](https://img.shields.io/badge/Render-46E3B7?style=flat-square&logo=render&logoColor=white)](https://render.com/) [![Netlify](https://img.shields.io/badge/Netlify-00C7B7?style=flat-square&logo=netlify&logoColor=white)](https://www.netlify.com/) | Containerized microservice deployment & CDN edge distribution |
 | **Auth & Media CDN** | [![Firebase](https://img.shields.io/badge/Firebase_Auth-FFCA28?style=flat-square&logo=firebase&logoColor=black)](https://firebase.google.com/) [![Cloudinary](https://img.shields.io/badge/Cloudinary-3448C5?style=flat-square&logo=cloudinary&logoColor=white)](https://cloudinary.com/) | User authentication & cloud figure asset hosting |
@@ -387,7 +402,10 @@ Live API: [https://granthastrax.onrender.com/](https://granthastrax.onrender.com
 | `POST` | `/api/writer-desk/template` | Generates a print-ready vector PDF cover template with bleed guides |
 | `POST` | `/api/writer-desk/barcode` | Generates a GS1 Bookland EAN-13 + EAN-5 barcode PNG buffer |
 | `POST` | `/api/image-studio/convert` | Transcodes, resizes, and optimizes raster/vector images |
-| `POST` | `/api/doc-studio/convert` | Converts documents across PDF, DOCX, Markdown, and HTML formats |
+| `GET` | `/api/image-studio/session` | Retrieves active working session and cached image metadata |
+| `POST` | `/api/image-studio/temp-upload` | Caches temporary working image with 5-minute TTL |
+| `POST` | `/api/doc-studio/process` | Universal document conversion across PDF, DOCX, EPUB, MD, LaTeX, HTML, and TXT |
+| `GET` | `/api/doc-studio/download/:filename` | Downloads processed document (auto-purged after 5 minutes) |
 
 ---
 
