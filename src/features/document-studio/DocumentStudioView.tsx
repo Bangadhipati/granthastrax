@@ -10,6 +10,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Panel } from "@/components/layout/Panel";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DocumentStudioSkeleton } from "@/components/ui/page-skeletons";
 import { api } from "@/lib/api";
 
 // ── Supported formats ────────────────────────────────────────────────────────
@@ -46,6 +48,7 @@ export function DocumentStudioView() {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Toggles
   const [convertEnabled, setConvertEnabled] = useState(true);
@@ -63,11 +66,71 @@ export function DocumentStudioView() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Initial load: restore preferences and 5-min jobs with smooth skeleton display
+  useEffect(() => {
+    let isMounted = true;
+    const init = async () => {
+      const startTime = Date.now();
+      try {
+        const savedJobs = localStorage.getItem("granthastrax_doc_jobs");
+        if (savedJobs) {
+          const parsed = JSON.parse(savedJobs);
+          const valid = parsed.filter((j: JobRecord) => j.expiresAt > Date.now());
+          setJobs(valid);
+        }
+        const savedSettings = localStorage.getItem("granthastrax_doc_settings");
+        if (savedSettings) {
+          const parsed = JSON.parse(savedSettings);
+          if (parsed.targetFormat) setTargetFormat(parsed.targetFormat);
+          if (parsed.compressPercent) setCompressPercent(parsed.compressPercent);
+          if (parsed.dpi) setDpi(parsed.dpi);
+          if (parsed.convertEnabled !== undefined) setConvertEnabled(parsed.convertEnabled);
+          if (parsed.compressEnabled !== undefined) setCompressEnabled(parsed.compressEnabled);
+          if (parsed.expandEnabled !== undefined) setExpandEnabled(parsed.expandEnabled);
+        }
+      } catch {} finally {
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 450) {
+          await new Promise((r) => setTimeout(r, 450 - elapsed));
+        }
+        if (isMounted) setIsInitializing(false);
+      }
+    };
+    init();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Save settings on change
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "granthastrax_doc_settings",
+        JSON.stringify({
+          targetFormat,
+          compressPercent,
+          dpi,
+          convertEnabled,
+          compressEnabled,
+          expandEnabled,
+        })
+      );
+    } catch {}
+  }, [targetFormat, compressPercent, dpi, convertEnabled, compressEnabled, expandEnabled]);
+
   // Live countdown timer — ticks every second, auto-removes expired jobs
   useEffect(() => {
     const id = setInterval(() => {
-      setNow(Date.now());
-      setJobs(prev => prev.filter(j => j.expiresAt > Date.now()));
+      const currentTime = Date.now();
+      setNow(currentTime);
+      setJobs((prev) => {
+        const filtered = prev.filter((j) => j.expiresAt > currentTime);
+        if (filtered.length !== prev.length) {
+          localStorage.setItem("granthastrax_doc_jobs", JSON.stringify(filtered));
+        }
+        return filtered;
+      });
     }, 1000);
     return () => clearInterval(id);
   }, []);
@@ -151,14 +214,22 @@ export function DocumentStudioView() {
       const { filename, downloadUrl, steps, originalName } = res.data;
       const fullUrl = `${api.defaults.baseURL}${downloadUrl}`;
 
-      setJobs(prev => [{
+      const newJob: JobRecord = {
         id: filename,
         originalName: originalName ?? file.name,
         filename,
         downloadUrl: fullUrl,
         steps: steps ?? [],
         expiresAt: Date.now() + 5 * 60 * 1000
-      }, ...prev]);
+      };
+
+      setJobs(prev => {
+        const next = [newJob, ...prev];
+        try {
+          localStorage.setItem("granthastrax_doc_jobs", JSON.stringify(next));
+        } catch {}
+        return next;
+      });
 
       // Auto-trigger download
       const a = document.createElement("a");
@@ -174,6 +245,10 @@ export function DocumentStudioView() {
       setIsProcessing(false);
     }
   };
+
+  if (isInitializing) {
+    return <DocumentStudioSkeleton />;
+  }
 
   return (
     <AppShell>
@@ -326,14 +401,14 @@ export function DocumentStudioView() {
             </Panel>
 
             {/* Recent Jobs or Capabilities Card */}
-            {jobs.length > 0 ? (
+            {jobs.length > 0 || isProcessing ? (
               <Panel className="p-5">
                 <div className="flex items-center justify-between mb-4 border-b border-border/60 pb-3">
                   <div className="flex items-center gap-2">
                     <Clock className="size-4 text-gold" />
                     <h3 className="text-sm font-semibold text-foreground">Recent Outputs</h3>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-gold/15 text-gold border border-gold/30">
-                      {jobs.length}
+                      {jobs.length + (isProcessing ? 1 : 0)}
                     </span>
                   </div>
                   <p className="text-[11px] text-muted-foreground">Auto-purged after 5 min</p>
@@ -350,6 +425,37 @@ export function DocumentStudioView() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/40">
+                      {isProcessing && (
+                        <tr className="skeleton-shimmer border-b border-gold/20 bg-gold/5">
+                          <td className="px-3.5 py-3">
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="size-3.5 rounded" variant="gold" glow />
+                              <span className="truncate max-w-[170px] sm:max-w-[220px] font-medium text-foreground text-xs">
+                                {file?.name}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-gold font-mono mt-0.5 animate-pulse flex items-center gap-1.5">
+                              <Loader2 className="size-2.5 animate-spin" />
+                              Compiling pipeline to .{targetFormat.toLowerCase()}...
+                            </div>
+                          </td>
+                          <td className="px-3.5 py-3">
+                            <div className="flex gap-1">
+                              <Skeleton className="h-5 w-16 rounded" variant="gold" />
+                              <Skeleton className="h-5 w-12 rounded" variant="subtle" />
+                            </div>
+                          </td>
+                          <td className="px-3.5 py-3">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-gold/15 text-gold border border-gold/30 animate-pulse">
+                              <Clock className="size-3" />
+                              5:00
+                            </span>
+                          </td>
+                          <td className="px-3.5 py-3 text-right">
+                            <Skeleton className="h-7 w-20 rounded-md ml-auto" variant="gold" glow />
+                          </td>
+                        </tr>
+                      )}
                       {jobs.map(job => {
                         const timeLeft = Math.max(0, job.expiresAt - now);
                         const mins = Math.floor(timeLeft / 60000);
