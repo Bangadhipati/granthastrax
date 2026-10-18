@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, Suspense } from "react";
 import { 
   Book, Settings, Download, UploadCloud, RefreshCw, 
   CheckCircle2, Ruler, Barcode, Loader2, ArrowLeft, ArrowRight,
-  Layers, Check, Sparkles, FileText, Sliders
+  Layers, Check, Sparkles, FileText, Sliders, Scissors
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -43,7 +43,21 @@ const GSM_THICKNESS: Record<string, number> = {
 };
 
 // --- 3D Book Viewer Component ---
-function BookViewer3D({ coverUrl, spineWidth, bookWidth, bookHeight }: { coverUrl: string, spineWidth: number, bookWidth: number, bookHeight: number }) {
+function BookViewer3D({ 
+  coverUrl, 
+  spineWidth, 
+  bookWidth, 
+  bookHeight,
+  bleedMm = 3,
+  trimBleed = true
+}: { 
+  coverUrl: string; 
+  spineWidth: number; 
+  bookWidth: number; 
+  bookHeight: number;
+  bleedMm?: number;
+  trimBleed?: boolean;
+}) {
   const mountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -89,23 +103,31 @@ function BookViewer3D({ coverUrl, spineWidth, bookWidth, bookHeight }: { coverUr
       texture.colorSpace = THREE.SRGBColorSpace;
       
       // Calculate UV mapping based on cover layout: [Back | Spine | Front]
-      const totalW = w + d + w;
-      const backRatio = w / totalW;
-      const spineRatio = d / totalW;
-      const frontRatio = w / totalW;
+      // When trimBleed is enabled, chop off the outer template bleed margins (standard 3mm on all 4 sides)
+      const effectiveBleed = trimBleed ? Math.max(0, bleedMm) : 0;
+      const fullTemplateW = (bookWidth * 2) + spineWidth + (effectiveBleed * 2);
+      const fullTemplateH = bookHeight + (effectiveBleed * 2);
 
-      // Slice the texture for each part
+      const uBleed = effectiveBleed / fullTemplateW;
+      const uBack = bookWidth / fullTemplateW;
+      const uSpine = spineWidth / fullTemplateW;
+      const uFront = bookWidth / fullTemplateW;
+
+      const vBleed = effectiveBleed / fullTemplateH;
+      const vTrim = bookHeight / fullTemplateH;
+
+      // Slice the texture for each part, starting inside the chopped outer bleed
       const backTexture = texture.clone();
-      backTexture.repeat.set(backRatio, 1);
-      backTexture.offset.set(0, 0);
+      backTexture.repeat.set(uBack, vTrim);
+      backTexture.offset.set(uBleed, vBleed);
 
       const spineTexture = texture.clone();
-      spineTexture.repeat.set(spineRatio, 1);
-      spineTexture.offset.set(backRatio, 0);
+      spineTexture.repeat.set(uSpine, vTrim);
+      spineTexture.offset.set(uBleed + uBack, vBleed);
 
       const frontTexture = texture.clone();
-      frontTexture.repeat.set(frontRatio, 1);
-      frontTexture.offset.set(backRatio + spineRatio, 0);
+      frontTexture.repeat.set(uFront, vTrim);
+      frontTexture.offset.set(uBleed + uBack + uSpine, vBleed);
 
       const pageMaterial = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.8 });
       
@@ -169,7 +191,7 @@ function BookViewer3D({ coverUrl, spineWidth, bookWidth, bookHeight }: { coverUr
       }
       renderer.dispose();
     };
-  }, [coverUrl, spineWidth, bookWidth, bookHeight]);
+  }, [coverUrl, spineWidth, bookWidth, bookHeight, bleedMm, trimBleed]);
 
   return <div ref={mountRef} className="w-full h-[520px] cursor-grab active:cursor-grabbing bg-muted/20 rounded-lg border border-border" />;
 }
@@ -255,6 +277,8 @@ export function WriterView() {
   const [templateUrl, setTemplateUrl] = useState<string | null>(null);
   const [barcodeUrl, setBarcodeUrl] = useState<string | null>(null);
   const [customCoverUrl, setCustomCoverUrl] = useState<string | null>(null);
+  const [trimBleed, setTrimBleed] = useState(true);
+  const [bleedCutMm, setBleedCutMm] = useState(3);
 
   // Live estimated dimensions
   const estimatedSpine = Math.max(3, (pageCount * (GSM_THICKNESS[gsm] ?? 0.0635)) + (coverType === 'hardcover' ? 6 : 0));
@@ -870,6 +894,12 @@ export function WriterView() {
                     <RefreshCw className="w-3.5 h-3.5 text-gold"/> Interactive 3D Mockup
                   </p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">Left-click drag to rotate • Scroll to zoom</p>
+                  {trimBleed && (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full w-fit">
+                      <Scissors className="size-3" />
+                      <span>Outer bleed trimmed ({bleedCutMm} mm chopped)</span>
+                    </div>
+                  )}
                 </div>
                 
                 {customCoverUrl && (
@@ -879,6 +909,8 @@ export function WriterView() {
                       spineWidth={spineWidth || activeSpine} 
                       bookWidth={selectedSize.w} 
                       bookHeight={selectedSize.h} 
+                      bleedMm={bleedCutMm}
+                      trimBleed={trimBleed}
                     />
                   </Suspense>
                 )}
@@ -918,6 +950,60 @@ export function WriterView() {
                     <span className="text-muted-foreground">Cover Format</span>
                     <span className="font-medium text-foreground capitalize">{coverType}</span>
                   </div>
+                </div>
+
+                {/* Template Bleed Trimming (Chopping) Control */}
+                <div className="p-3 rounded-lg border border-border bg-card/60 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                      <Scissors className="size-3.5 text-gold" />
+                      <span>Chop Outer Bleed</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setTrimBleed(!trimBleed)}
+                      className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+                        trimBleed ? 'bg-gold' : 'bg-muted'
+                      }`}
+                      title={trimBleed ? "Bleed trimming active" : "Raw un-trimmed image"}
+                    >
+                      <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+                        trimBleed ? 'translate-x-3.5' : 'translate-x-0.5'
+                      }`} />
+                    </button>
+                  </div>
+                  
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {trimBleed 
+                      ? "Cuts off the extra template bleed margin & outer guide marks so only the clean trimmed cover wraps the book."
+                      : "Displaying full un-cropped upload including outer margins."}
+                  </p>
+
+                  {trimBleed && (
+                    <div className="pt-1 flex items-center justify-between">
+                      <span className="text-[11px] text-muted-foreground">Chop depth:</span>
+                      <div className="flex items-center gap-1">
+                        {[
+                          { label: "3 mm (Std)", val: 3 },
+                          { label: "5 mm (Wrap)", val: 5 },
+                          { label: "0 mm", val: 0 }
+                        ].map(p => (
+                          <button
+                            key={p.val}
+                            type="button"
+                            onClick={() => setBleedCutMm(p.val)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium border transition-all ${
+                              bleedCutMm === p.val
+                                ? 'bg-gold text-black border-gold font-bold shadow-xs'
+                                : 'bg-secondary/70 border-border text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-3 space-y-2">
