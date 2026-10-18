@@ -478,7 +478,7 @@ app.post('/api/compile', requireAuth, async (req, res) => {
 // --- Project Source Export (ZIP) Route ---
 app.post('/api/compile/export', requireAuth, async (req, res) => {
   try {
-    const { content, images = [], pdfBase64, filename = 'project_source.zip' } = req.body;
+    const { content, images = [], pdfBase64, filename = 'project_source.zip', pdfFilename } = req.body;
     const AdmZip = require('adm-zip');
     const zip = new AdmZip();
 
@@ -490,7 +490,8 @@ app.post('/api/compile/export', requireAuth, async (req, res) => {
       try {
         const pdfBuffer = Buffer.from(pdfBase64, 'base64');
         if (pdfBuffer.length > 0) {
-          zip.addFile('document.pdf', pdfBuffer);
+          const resolvedPdfName = pdfFilename || (filename.endsWith('.zip') ? filename.replace(/\.zip$/i, '.pdf') : 'document.pdf');
+          zip.addFile(resolvedPdfName, pdfBuffer);
         }
       } catch (pdfErr) {
         console.warn('Failed to parse pdfBase64 for ZIP export:', pdfErr.message);

@@ -287,12 +287,14 @@ export function ResearchWorkspace({ projectId }: { projectId: string }) {
 
       const safeTitle = (project?.title || "project_source").replace(/[^a-zA-Z0-9_\-\s]/g, "").trim().replace(/\s+/g, "_") || "project_source";
       const filename = `${safeTitle}.zip`;
+      const pdfFilename = `${safeTitle}.pdf`;
 
       const res = await api.post("/api/compile/export", { 
         content: latexContent,
         images: project?.images || [],
         pdfBase64,
-        filename
+        filename,
+        pdfFilename
       }, { responseType: 'blob' });
       
       const blob = new Blob([res.data], { type: 'application/zip' });
