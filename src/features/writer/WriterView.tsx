@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, Suspense } from "react";
 import { 
   Book, Settings, Download, UploadCloud, RefreshCw, 
   CheckCircle2, Ruler, Barcode, Loader2, ArrowLeft, ArrowRight,
-  Layers, Check, Sparkles, FileText, Sliders, Scissors, Sun
+  Layers, Check, Sparkles, FileText, Sliders, Scissors, Sun,
+  Play, Pause, RotateCcw, RotateCw, Eye
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -156,6 +157,41 @@ function createDefaultCoverTexture(title: string, author: string, width = 1024, 
   return texture;
 }
 
+function loadCoverTexture(url: string, onLoad: (texture: THREE.CanvasTexture, aspect: number) => void) {
+  const img = new Image();
+  // CRITICAL: Only set crossOrigin for remote HTTP(S) links, NEVER for data: or blob: URLs
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    img.crossOrigin = 'anonymous';
+  }
+  let isDone = false;
+  const processImage = () => {
+    if (isDone) return;
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    isDone = true;
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(img, 0, 0);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.needsUpdate = true;
+      const aspect = canvas.width / canvas.height;
+      onLoad(texture, aspect);
+    }
+  };
+
+  img.onload = processImage;
+  img.onerror = (e) => {
+    console.error("Cover texture loading error:", e);
+  };
+  img.src = url;
+  if (img.complete && img.naturalWidth > 0) {
+    processImage();
+  }
+}
+
 // --- 3D Book Viewer Component ---
 function BookViewer3D({ 
   coverUrl, 
@@ -166,7 +202,8 @@ function BookViewer3D({
   trimBleed = true,
   finish = "matte",
   title = "My Epic Novel",
-  author = "Author Name"
+  author = "Author Name",
+  onCoverUpload
 }: { 
   coverUrl?: string | null; 
   spineWidth: number; 
@@ -177,6 +214,7 @@ function BookViewer3D({
   finish?: "matte" | "glossy";
   title?: string;
   author?: string;
+  onCoverUpload?: (dataUrl: string) => void;
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const geosRef = useRef<{
@@ -187,6 +225,18 @@ function BookViewer3D({
   } | null>(null);
   const materialRef = useRef<THREE.MeshPhysicalMaterial | null>(null);
   const specLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const bookGroupRef = useRef<THREE.Group | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+
+  const [isAutoRotating, setIsAutoRotating] = useState(false);
+  const autoRotateRef = useRef(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  // Keep autoRotateRef in sync with state for requestAnimationFrame
+  useEffect(() => {
+    autoRotateRef.current = isAutoRotating;
+  }, [isAutoRotating]);
 
   // Apply UV mapping based on trimBleed and bleedMm
   const updateUVs = (
@@ -242,77 +292,64 @@ function BookViewer3D({
     }
   };
 
-  // Re-apply UVs immediately whenever trimBleed or bleedMm change without rebuilding the 3D scene
-  useEffect(() => {
-    if (geosRef.current) {
-      updateUVs(geosRef.current.imageAspect, geosRef.current);
-    }
-  }, [trimBleed, bleedMm, bookWidth, bookHeight, spineWidth]);
-
-  // Reactive Finish update (Matte vs Glossy) in real-time
-  useEffect(() => {
-    if (materialRef.current) {
-      const isGlossy = finish === "glossy";
-      materialRef.current.roughness = isGlossy ? 0.12 : 0.82;
-      materialRef.current.metalness = isGlossy ? 0.08 : 0.0;
-      materialRef.current.clearcoat = isGlossy ? 1.0 : 0.0;
-      materialRef.current.clearcoatRoughness = isGlossy ? 0.08 : 0.8;
-      materialRef.current.reflectivity = isGlossy ? 0.9 : 0.1;
-      materialRef.current.needsUpdate = true;
-    }
-    if (specLightRef.current) {
-      specLightRef.current.intensity = finish === "glossy" ? 1.2 : 0.35;
-    }
-  }, [finish]);
-
-  // Main 3D scene setup
+  // Main 3D scene setup (Constructed ONCE and preserved across texture/control changes)
   useEffect(() => {
     if (!mountRef.current) return;
+    const currentMount = mountRef.current;
+    currentMount.innerHTML = '';
 
     const scale = 0.02;
     const w = Math.max(bookWidth * scale, 0.5);
     const h = Math.max(bookHeight * scale, 0.5);
     const d = Math.max(spineWidth * scale, 0.08);
 
-    const containerW = mountRef.current.clientWidth || mountRef.current.offsetWidth || 800;
-    const containerH = mountRef.current.clientHeight || mountRef.current.offsetHeight || 520;
+    const containerW = currentMount.clientWidth || currentMount.offsetWidth || 800;
+    const containerH = currentMount.clientHeight || currentMount.offsetHeight || 520;
     const safeAspect = containerH > 0 ? containerW / containerH : 1.5;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, safeAspect, 0.1, 100);
     camera.position.set(0, 1.2, 7.5);
+    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(containerW, containerH);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.domElement.style.touchAction = 'none';
+    renderer.domElement.style.userSelect = 'none';
     renderer.domElement.style.display = 'block';
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
+    renderer.domElement.style.cursor = 'grab';
     mountRef.current.appendChild(renderer.domElement);
 
+    // Attach OrbitControls directly to renderer.domElement for pristine mouse & touch rotation
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
+    controls.dampingFactor = 0.06;
     controls.enableRotate = true;
-    controls.rotateSpeed = 0.9;
+    controls.rotateSpeed = 1.0;
     controls.enableZoom = true;
     controls.zoomSpeed = 1.0;
-    controls.enablePan = false; // Keep book centered while orbiting
+    controls.enablePan = false; // Keep book centered
     controls.minDistance = 2.0;
     controls.maxDistance = 18;
     controls.target.set(0, 0, 0);
     controls.update();
+    controlsRef.current = controls;
+
+    const preventDrag = (e: DragEvent) => e.preventDefault();
+    renderer.domElement.addEventListener('dragstart', preventDrag);
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
     scene.add(ambientLight);
     
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.95);
     dirLight.position.set(5, 6, 5);
     scene.add(dirLight);
 
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.45);
     fillLight.position.set(-5, 0, -5);
     scene.add(fillLight);
 
@@ -322,20 +359,24 @@ function BookViewer3D({
     scene.add(specLight);
     specLightRef.current = specLight;
 
-    // Materials: Start with default procedural texture so the book is NEVER blank
-    const defaultTexture = createDefaultCoverTexture(title, author);
+    // Base Material: Start with default procedural texture
+    const initialTexture = createDefaultCoverTexture(title, author);
     const isGlossy = finish === "glossy";
     const coverMaterial = new THREE.MeshPhysicalMaterial({ 
-      map: defaultTexture, 
+      map: initialTexture, 
       roughness: isGlossy ? 0.12 : 0.82,
       metalness: isGlossy ? 0.08 : 0.0,
       clearcoat: isGlossy ? 1.0 : 0.0,
       clearcoatRoughness: isGlossy ? 0.08 : 0.8,
       reflectivity: isGlossy ? 0.9 : 0.1,
+      side: THREE.DoubleSide,
     });
     materialRef.current = coverMaterial;
 
-    const pageMaterial = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.85 });
+    const pageMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0xf4ecd8, 
+      roughness: 0.9 
+    });
 
     // Geometries
     const frontGeo = new THREE.PlaneGeometry(w, h);
@@ -352,6 +393,7 @@ function BookViewer3D({
     updateUVs(1.5, geosRef.current);
 
     const bookGroup = new THREE.Group();
+    bookGroupRef.current = bookGroup;
 
     // Front Cover Plane
     const frontMesh = new THREE.Mesh(frontGeo, coverMaterial);
@@ -376,51 +418,32 @@ function BookViewer3D({
     pagesMesh.position.set(0.015, 0, 0);
     bookGroup.add(pagesMesh);
 
-    // Center and angle the book nicely
-    bookGroup.rotation.y = -Math.PI / 4;
+    // Center and angle the book nicely at front 3D showcase perspective
+    bookGroup.rotation.y = -0.35;
     scene.add(bookGroup);
 
-    // If a custom cover image is supplied, load it into coverMaterial
+    // If an initial coverUrl is already present on mount, load it immediately
     if (coverUrl) {
-      const applyTexture = (tex: THREE.Texture, aspect: number) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
+      loadCoverTexture(coverUrl, (tex, aspect) => {
+        if (coverMaterial.map && coverMaterial.map !== tex) {
+          coverMaterial.map.dispose();
+        }
         coverMaterial.map = tex;
         coverMaterial.needsUpdate = true;
         if (geosRef.current) {
           geosRef.current.imageAspect = aspect;
           updateUVs(aspect, geosRef.current);
         }
-      };
-
-      const textureLoader = new THREE.TextureLoader();
-      textureLoader.setCrossOrigin('');
-      textureLoader.load(
-        coverUrl,
-        (texture) => {
-          const imageAspect = (texture.image && texture.image.width && texture.image.height) 
-            ? texture.image.width / texture.image.height 
-            : 1.5;
-          applyTexture(texture, imageAspect);
-        },
-        undefined,
-        () => {
-          // Direct HTMLImageElement fallback in case TextureLoader hits any CORS/scheme constraint
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => {
-            const fallbackTex = new THREE.CanvasTexture(img);
-            const aspect = (img.width && img.height) ? img.width / img.height : 1.5;
-            applyTexture(fallbackTex, aspect);
-          };
-          img.src = coverUrl;
-        }
-      );
+      });
     }
 
     let animId: number;
-    // Animation Loop runs continuously from frame 1
+    // Continuous animation loop that smoothly rotates the turntable if auto-spin is on
     const animate = () => {
       animId = requestAnimationFrame(animate);
+      if (autoRotateRef.current && bookGroupRef.current) {
+        bookGroupRef.current.rotation.y += 0.008;
+      }
       controls.update();
       renderer.render(scene, camera);
     };
@@ -458,33 +481,156 @@ function BookViewer3D({
       cancelAnimationFrame(animId);
       resizeObserver.disconnect();
       window.removeEventListener('resize', handleWindowResize);
+      renderer.domElement.removeEventListener('dragstart', preventDrag);
       controls.dispose();
+      controlsRef.current = null;
+      bookGroupRef.current = null;
+      cameraRef.current = null;
       geosRef.current = null;
       materialRef.current = null;
       specLightRef.current = null;
-      if (mountRef.current && renderer.domElement.parentNode === mountRef.current) {
-        mountRef.current.removeChild(renderer.domElement);
+      if (currentMount && renderer.domElement.parentNode === currentMount) {
+        currentMount.removeChild(renderer.domElement);
       }
       renderer.dispose();
     };
-  }, [coverUrl, bookWidth, bookHeight, spineWidth, title, author]);
+  }, [bookWidth, bookHeight, spineWidth]);
+
+  // Re-apply UVs immediately whenever trimBleed or bleedMm change without rebuilding the 3D scene
+  useEffect(() => {
+    if (geosRef.current) {
+      updateUVs(geosRef.current.imageAspect, geosRef.current);
+    }
+  }, [trimBleed, bleedMm, bookWidth, bookHeight, spineWidth]);
+
+  // Reactive Finish update (Matte vs Glossy) in real-time
+  useEffect(() => {
+    if (materialRef.current) {
+      const isGlossy = finish === "glossy";
+      materialRef.current.roughness = isGlossy ? 0.12 : 0.82;
+      materialRef.current.metalness = isGlossy ? 0.08 : 0.0;
+      materialRef.current.clearcoat = isGlossy ? 1.0 : 0.0;
+      materialRef.current.clearcoatRoughness = isGlossy ? 0.08 : 0.8;
+      materialRef.current.reflectivity = isGlossy ? 0.9 : 0.1;
+      materialRef.current.needsUpdate = true;
+    }
+    if (specLightRef.current) {
+      specLightRef.current.intensity = finish === "glossy" ? 1.2 : 0.35;
+    }
+  }, [finish]);
+
+  // Reactive Cover Texture Loader: Swaps texture smoothly without destroying 3D scene or controls
+  useEffect(() => {
+    if (!materialRef.current || !geosRef.current) return;
+
+    if (coverUrl) {
+      loadCoverTexture(coverUrl, (tex, aspect) => {
+        if (materialRef.current && geosRef.current) {
+          if (materialRef.current.map && materialRef.current.map !== tex) {
+            materialRef.current.map.dispose();
+          }
+          materialRef.current.map = tex;
+          materialRef.current.needsUpdate = true;
+          geosRef.current.imageAspect = aspect;
+          updateUVs(aspect, geosRef.current);
+        }
+      });
+    } else {
+      const defTex = createDefaultCoverTexture(title, author);
+      if (defTex && materialRef.current && geosRef.current) {
+        if (materialRef.current.map && materialRef.current.map !== defTex) {
+          materialRef.current.map.dispose();
+        }
+        materialRef.current.map = defTex;
+        materialRef.current.needsUpdate = true;
+        geosRef.current.imageAspect = 1.5;
+        updateUVs(1.5, geosRef.current);
+      }
+    }
+  }, [coverUrl, title, author]);
+
+  // Interactive Rotation Helpers
+  const rotateLeft = () => {
+    if (bookGroupRef.current) {
+      bookGroupRef.current.rotation.y -= Math.PI / 4;
+    }
+  };
+
+  const rotateRight = () => {
+    if (bookGroupRef.current) {
+      bookGroupRef.current.rotation.y += Math.PI / 4;
+    }
+  };
+
+  const setViewAngle = (angle: number) => {
+    setIsAutoRotating(false);
+    if (bookGroupRef.current) {
+      bookGroupRef.current.rotation.y = angle;
+    }
+    if (controlsRef.current && cameraRef.current) {
+      cameraRef.current.position.set(0, 1.2, 7.5);
+      controlsRef.current.target.set(0, 0, 0);
+      controlsRef.current.update();
+    }
+  };
+
+  const resetView = () => {
+    setIsAutoRotating(false);
+    if (bookGroupRef.current) {
+      bookGroupRef.current.rotation.y = -0.35;
+    }
+    if (controlsRef.current && cameraRef.current) {
+      cameraRef.current.position.set(0, 1.2, 7.5);
+      controlsRef.current.target.set(0, 0, 0);
+      controlsRef.current.update();
+    }
+  };
+
+  // Drag-and-drop file upload handlers on the 3D canvas
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && (file.type === 'image/png' || file.type === 'image/jpeg') && onCoverUpload) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        if (dataUrl) {
+          onCoverUpload(dataUrl);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   return (
-    <div className="relative w-full h-[520px] rounded-lg overflow-hidden bg-muted/20 border border-border">
-      <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
-      
-      {/* Floating interactive instructions pill */}
+    <div 
+      className={`relative w-full h-[540px] rounded-lg overflow-hidden bg-muted/20 border transition-all ${
+        isDraggingOver ? 'border-gold ring-2 ring-gold/40 bg-gold/5' : 'border-border'
+      }`}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOver(true); }}
+      onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOver(false); }}
+      onDrop={handleDrop}
+    >
+      <div 
+        ref={mountRef} 
+        onDragStart={(e) => e.preventDefault()}
+        className="w-full h-full cursor-grab active:cursor-grabbing select-none" 
+        style={{ touchAction: 'none' }}
+      />
+
+      {/* Top Floating Info: Status & Instructions */}
       <div className="absolute top-3 left-3 pointer-events-none flex items-center gap-2 bg-background/80 backdrop-blur-md border border-border/80 px-2.5 py-1 rounded-full text-[11px] font-medium text-muted-foreground shadow-xs">
         <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
         <span>Drag to rotate • Scroll to zoom</span>
       </div>
 
-      {/* Floating Cover Status badge */}
       <div className="absolute top-3 right-3 pointer-events-none flex items-center gap-1.5 bg-background/80 backdrop-blur-md border border-border/80 px-2.5 py-1 rounded-full text-[11px] font-mono text-foreground shadow-xs">
         {coverUrl ? (
           <>
             <span className="text-emerald-400">✓</span>
-            <span className="text-emerald-300 font-semibold">Custom Cover</span>
+            <span className="text-emerald-300 font-semibold">Custom Cover Active</span>
           </>
         ) : (
           <>
@@ -492,6 +638,99 @@ function BookViewer3D({
             <span className="text-muted-foreground">Default Blueprint Cover</span>
           </>
         )}
+      </div>
+
+      {/* Drag & Drop Visual Overlay Guide */}
+      {isDraggingOver && (
+        <div className="absolute inset-0 pointer-events-none bg-background/70 backdrop-blur-sm flex flex-col items-center justify-center border-2 border-dashed border-gold text-gold z-20 animate-in fade-in duration-200">
+          <UploadCloud className="size-10 mb-2 animate-bounce" />
+          <p className="font-semibold text-sm">Drop Cover Image Here</p>
+          <p className="text-xs text-muted-foreground">Applies directly to 3D book model</p>
+        </div>
+      )}
+
+      {/* Interactive 3D Control Bar: Smooth Rotation Buttons, Auto-Spin & Perspective Snapping */}
+      <div className="absolute bottom-3 inset-x-0 mx-auto w-fit max-w-[92%] px-2 py-1.5 rounded-full bg-background/90 backdrop-blur-md border border-border/80 shadow-lg flex items-center gap-1 sm:gap-1.5 z-20 text-xs">
+        
+        {/* Manual Step Rotation */}
+        <button
+          type="button"
+          onClick={rotateLeft}
+          title="Rotate Left 45°"
+          className="flex items-center gap-1 px-2 py-1 rounded-full bg-secondary/80 hover:bg-secondary text-foreground text-[11px] font-medium transition cursor-pointer"
+        >
+          <RotateCcw className="size-3 text-gold" />
+          <span className="hidden sm:inline">-45°</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={rotateRight}
+          title="Rotate Right 45°"
+          className="flex items-center gap-1 px-2 py-1 rounded-full bg-secondary/80 hover:bg-secondary text-foreground text-[11px] font-medium transition cursor-pointer"
+        >
+          <RotateCw className="size-3 text-gold" />
+          <span className="hidden sm:inline">+45°</span>
+        </button>
+
+        <div className="h-4 w-px bg-border/80 mx-0.5" />
+
+        {/* Auto-Spin Turntable Toggle */}
+        <button
+          type="button"
+          onClick={() => setIsAutoRotating(!isAutoRotating)}
+          title={isAutoRotating ? "Pause 360° Auto-Spin" : "Start continuous 360° Auto-Spin"}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition cursor-pointer ${
+            isAutoRotating 
+              ? 'bg-gold text-black font-semibold shadow-xs' 
+              : 'bg-secondary/80 hover:bg-secondary text-foreground'
+          }`}
+        >
+          {isAutoRotating ? <Pause className="size-3" /> : <Play className="size-3 text-gold" />}
+          <span>{isAutoRotating ? "Spinning" : "Auto-Spin"}</span>
+        </button>
+
+        <div className="h-4 w-px bg-border/80 mx-0.5" />
+
+        {/* Quick Perspective Snaps */}
+        <button
+          type="button"
+          onClick={() => setViewAngle(0)}
+          title="View Front Cover"
+          className="px-2 py-1 rounded-full bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground text-[11px] font-medium transition cursor-pointer"
+        >
+          Front
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setViewAngle(Math.PI / 2)}
+          title="View Spine"
+          className="px-2 py-1 rounded-full bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground text-[11px] font-medium transition cursor-pointer"
+        >
+          Spine
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setViewAngle(Math.PI)}
+          title="View Back Cover"
+          className="px-2 py-1 rounded-full bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground text-[11px] font-medium transition cursor-pointer"
+        >
+          Back
+        </button>
+
+        <div className="h-4 w-px bg-border/80 mx-0.5" />
+
+        {/* Reset View */}
+        <button
+          type="button"
+          onClick={resetView}
+          title="Reset Camera & Angle"
+          className="p-1 rounded-full bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground transition cursor-pointer"
+        >
+          <RefreshCw className="size-3" />
+        </button>
       </div>
     </div>
   );
@@ -653,7 +892,7 @@ export function WriterView() {
       />
 
       {/* Widescreen optimized layout: max-w-7xl with fluid margins */}
-      <div className="mx-auto mt-4 sm:mt-6 max-w-7xl w-full px-4 sm:px-6 lg:px-8 pb-16">
+      <div className="mx-auto mt-4 sm:mt-6 max-w-7xl w-full px-4 sm:px-6 lg:px-8 pb-32">
         
         {/* --- Progress Steps (Compact, elegant) --- */}
         <div className="flex items-center justify-center gap-3 sm:gap-6 mb-6 sm:mb-8">
@@ -1238,6 +1477,7 @@ export function WriterView() {
                   finish={coverFinish}
                   title={title}
                   author={author}
+                  onCoverUpload={(url) => setCustomCoverUrl(url)}
                 />
               </Panel>
             </div>
