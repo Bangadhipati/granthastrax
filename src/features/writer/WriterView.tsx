@@ -28,10 +28,14 @@ const SIZES: BookSize[] = [
   { name: "Square", inches: '7.5" × 7.5"', w: 190.5, h: 190.5 },
 ];
 
+// Official GS1 / BISG Bookland EAN-5 Currency Lead-Digit Standards
 const CURRENCIES = [
-  { code: "USD", symbol: "$" }, { code: "EUR", symbol: "€" }, 
-  { code: "GBP", symbol: "£" }, { code: "INR", symbol: "₹" },
-  { code: "CAD", symbol: "$" }, { code: "AUD", symbol: "$" },
+  { code: "USD", symbol: "$", label: "USD ($) — US Dollar", prefix: "5" },
+  { code: "CAD", symbol: "C$", label: "CAD (C$) — Canadian Dollar", prefix: "6" },
+  { code: "GBP", symbol: "£", label: "GBP (£) — British Pound", prefix: "9" },
+  { code: "EUR", symbol: "€", label: "EUR (€) — Euro", prefix: "1" },
+  { code: "AUD", symbol: "A$", label: "AUD (A$) — Australian Dollar", prefix: "3" },
+  { code: "NZD", symbol: "NZ$", label: "NZD (NZ$) — New Zealand Dollar", prefix: "4" },
 ];
 
 const GSM_THICKNESS: Record<string, number> = {
@@ -671,9 +675,9 @@ export function WriterView() {
                     />
                   </div>
 
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">Retail Price</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="sm:col-span-2">
+                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">Retail Price (Optional)</label>
                       <input 
                         type="number" 
                         step="0.01" 
@@ -683,17 +687,27 @@ export function WriterView() {
                         className="w-full bg-background border border-border rounded-md px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-gold" 
                       />
                     </div>
-                    <div className="w-24">
-                      <label className="text-xs font-medium text-muted-foreground block mb-1.5">Currency</label>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground block mb-1.5" title="GS1/BISG Designated Bookland EAN Currencies">
+                        Currency
+                      </label>
                       <select 
                         value={currency} 
                         onChange={e => setCurrency(e.target.value)} 
                         className="w-full bg-background border border-border rounded-md px-2 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-gold"
+                        title="Bookland EAN barcode only supports officially designated GS1/BISG currencies"
                       >
-                        {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code} {c.symbol}</option>)}
+                        {CURRENCIES.map(c => (
+                          <option key={c.code} value={c.code} title={`${c.label} (Lead digit: ${c.prefix})`}>
+                            {c.code} ({c.symbol})
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Only officially recognized Bookland EAN-5 currencies (<span className="text-foreground font-mono">USD, CAD, GBP, EUR, AUD, NZD</span>) are allowed for barcode price supplements per GS1 & BISG standards.
+                  </p>
                 </Panel>
               </div>
             </div>

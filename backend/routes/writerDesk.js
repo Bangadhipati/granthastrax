@@ -186,6 +186,31 @@ router.post('/barcode', async (req, res) => {
     // This satisfies bwip-js 'isbn' bcid requirement and triggers native "ISBN ..." top text
     const validIsbn = `${base12.substring(0,3)}-${base12.substring(3,4)}-${base12.substring(4,6)}-${base12.substring(6,12)}-${checkDigit}`;
 
+    // Official GS1 / BISG Bookland EAN-5 Currency Lead-Digit Standards:
+    // 5 = USD (United States Dollar)
+    // 6 = CAD (Canadian Dollar)
+    // 9 = GBP (British Pound Sterling)
+    // 3 = AUD (Australian Dollar)
+    // 4 = NZD (New Zealand Dollar)
+    // 1 = EUR (Euro)
+    const OFFICIAL_CURRENCY_PREFIXES = {
+      USD: '5',
+      CAD: '6',
+      GBP: '9',
+      AUD: '3',
+      NZD: '4',
+      EUR: '1'
+    };
+
+    const CURRENCY_SYMBOLS = {
+      USD: '$',
+      CAD: 'C$',
+      GBP: '£',
+      AUD: 'A$',
+      NZD: 'NZ$',
+      EUR: '€'
+    };
+
     // Build barcode text
     let barcodeText = validIsbn;
     let addonCode = '';
@@ -193,14 +218,22 @@ router.post('/barcode', async (req, res) => {
     
     if (price) {
       const priceNum = parseFloat(price);
-      if (!isNaN(priceNum)) {
-        // Encode price: 5-digit supplement (9XXXX = price in local currency cents)
-        const encoded = Math.min(99999, Math.round(priceNum * 100));
-        addonCode = String(encoded).padStart(5, '0');
+      if (!isNaN(priceNum) && priceNum > 0) {
+        const curCode = (currency || 'USD').toUpperCase();
+        if (!OFFICIAL_CURRENCY_PREFIXES[curCode]) {
+          return res.status(400).json({
+            error: `Currency '${currency}' is not officially recognized for Bookland EAN-5 barcodes. Officially designated currencies: ${Object.keys(OFFICIAL_CURRENCY_PREFIXES).join(', ')}.`
+          });
+        }
+        const prefix = OFFICIAL_CURRENCY_PREFIXES[curCode];
+        // 4-digit price in cents (e.g. $19.99 -> 1999 -> 51999)
+        const cents = Math.min(9999, Math.round(priceNum * 100));
+        addonCode = `${prefix}${String(cents).padStart(4, '0')}`;
         // Space separates the ISBN from the addon code for bwip-js isbn type
         barcodeText = `${validIsbn} ${addonCode}`;
         // Human-readable text under the addon bars
-        formattedPrice = `${currency || ''} ${priceNum.toFixed(2)}`.trim();
+        const symbol = CURRENCY_SYMBOLS[curCode] || '$';
+        formattedPrice = `${symbol}${priceNum.toFixed(2)}`;
       }
     }
 
