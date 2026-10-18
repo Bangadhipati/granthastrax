@@ -14,6 +14,17 @@ function calcSpine(pageCount, gsm, coverType) {
   return Math.max(spineWidth, 3); // minimum 3mm
 }
 
+// Helper to format dimensions according to selected unit in PDF template
+function formatDim(mm, targetUnit) {
+  if (targetUnit === 'in') {
+    return `${(mm / 25.4).toFixed(2)} in`;
+  }
+  if (targetUnit === 'cm') {
+    return `${(mm / 10).toFixed(2)} cm`;
+  }
+  return `${mm.toFixed(1)} mm`;
+}
+
 // ── POST /api/writer-desk/template ──────────────────────────────────────────
 router.post('/template', async (req, res) => {
   try {
@@ -24,7 +35,8 @@ router.post('/template', async (req, res) => {
       paperGSM,
       coverType,
       bookTitle,
-      authorName
+      authorName,
+      unit = 'mm'
     } = req.body;
 
     const w = parseFloat(trimWidth);
@@ -102,19 +114,19 @@ router.post('/template', async (req, res) => {
 
     // Back cover label
     doc.text('BACK COVER', backX + toPt(5), coverY + toPt(5), { width: coverW - toPt(10), align: 'center' });
-    doc.text(`${w.toFixed(1)} × ${h.toFixed(1)} mm`, backX + toPt(5), coverY + toPt(15), { width: coverW - toPt(10), align: 'center' });
+    doc.text(`${formatDim(w, unit)} × ${formatDim(h, unit)}`, backX + toPt(5), coverY + toPt(15), { width: coverW - toPt(10), align: 'center' });
 
     // Spine label (rotated)
     doc.save();
     doc.translate(spineX + toPt(spineW / 2), coverY + coverH / 2);
     doc.rotate(-90);
-    doc.fillColor('#666666').fontSize(7).text(`SPINE  ${spineW.toFixed(1)} mm`, -60, -4, { width: 120, align: 'center' });
+    doc.fillColor('#666666').fontSize(7).text(`SPINE  ${formatDim(spineW, unit)}`, -60, -4, { width: 120, align: 'center' });
     doc.restore();
 
     // Front cover label
     doc.fillColor('#999999').fontSize(9).font('Helvetica');
     doc.text('FRONT COVER', frontX + toPt(5), coverY + toPt(5), { width: coverW - toPt(10), align: 'center' });
-    doc.text(`${w.toFixed(1)} × ${h.toFixed(1)} mm`, frontX + toPt(5), coverY + toPt(15), { width: coverW - toPt(10), align: 'center' });
+    doc.text(`${formatDim(w, unit)} × ${formatDim(h, unit)}`, frontX + toPt(5), coverY + toPt(15), { width: coverW - toPt(10), align: 'center' });
 
     // Book title hint on front
     if (bookTitle) {
@@ -129,18 +141,18 @@ router.post('/template', async (req, res) => {
     // ── Legend box ────────────────────────────────────────────────────────
     const legX = toPt(2), legY = toPt(2);
     doc.fillColor('#333333').fontSize(6.5).font('Helvetica');
-    doc.rect(legX, legY, 120, 44).fill('#ffffffbb');
+    doc.rect(legX, legY, 130, 44).fill('#ffffffbb');
     doc.fillColor('#333333').text('LEGEND', legX + 4, legY + 4);
     doc.moveTo(legX + 4, legY + 14).lineTo(legX + 22, legY + 14).dash(2, { space: 2 }).strokeColor('#ff0000').stroke().undash();
-    doc.fillColor('#555555').text('Bleed line (3mm) — extend design to here', legX + 26, legY + 11);
+    doc.fillColor('#555555').text(`Bleed line (${formatDim(bleed, unit)}) — extend design to here`, legX + 26, legY + 11);
     doc.moveTo(legX + 4, legY + 24).lineTo(legX + 22, legY + 24).dash(2, { space: 2 }).strokeColor('#00aa44').stroke().undash();
-    doc.fillColor('#555555').text('Safe zone (5mm) — keep text inside here', legX + 26, legY + 21);
-    doc.fillColor('#555555').text(`Spine: ${spineW.toFixed(2)} mm  ·  GSM: ${gsm}  ·  Pages: ${pages}  ·  Cover: ${coverType}`, legX + 4, legY + 33);
+    doc.fillColor('#555555').text(`Safe zone (${formatDim(safe, unit)}) — keep text inside here`, legX + 26, legY + 21);
+    doc.fillColor('#555555').text(`Spine: ${formatDim(spineW, unit)}  ·  GSM: ${gsm}  ·  Pages: ${pages}  ·  Cover: ${coverType}`, legX + 4, legY + 33);
 
     // ── Dimensions line (bottom) ──────────────────────────────────────────
     doc.fillColor('#aaaaaa').fontSize(7);
     doc.text(
-      `Total bleed area: ${totalW.toFixed(1)} × ${totalH.toFixed(1)} mm   |   Trim: ${(totalW - bleed * 2).toFixed(1)} × ${(totalH - bleed * 2).toFixed(1)} mm`,
+      `Total bleed area: ${formatDim(totalW, unit)} × ${formatDim(totalH, unit)}   |   Trim: ${formatDim(totalW - bleed * 2, unit)} × ${formatDim(totalH - bleed * 2, unit)}`,
       toPt(bleed), toPt(totalH - 5), { width: toPt(totalW - bleed * 2), align: 'center' }
     );
 

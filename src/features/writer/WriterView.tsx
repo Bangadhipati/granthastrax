@@ -42,6 +42,25 @@ const GSM_THICKNESS: Record<string, number> = {
   "120": 0.08
 };
 
+export type MeasurementUnit = "mm" | "in" | "cm";
+
+export const formatDim = (mm: number, unit: MeasurementUnit, withUnit = true): string => {
+  if (isNaN(mm) || mm === undefined) return withUnit ? `0 ${unit}` : "0";
+  let val: string;
+  let suffix: string;
+  if (unit === "in") {
+    val = (mm / 25.4).toFixed(2);
+    suffix = ' in';
+  } else if (unit === "cm") {
+    val = (mm / 10).toFixed(2);
+    suffix = ' cm';
+  } else {
+    val = mm.toFixed(1);
+    suffix = ' mm';
+  }
+  return withUnit ? `${val}${suffix}` : val;
+};
+
 // --- 3D Book Viewer Component ---
 function BookViewer3D({ 
   coverUrl, 
@@ -205,7 +224,7 @@ export function WriterView() {
   const defaultSize = SIZES[1] ?? { name: "Trade Paperback (US)", inches: '6" × 9"', w: 152.4, h: 228.6 };
   const [selectedSize, setSelectedSize] = useState<BookSize>(defaultSize);
   const [isCustomSize, setIsCustomSize] = useState(false);
-  const [customUnit, setCustomUnit] = useState<"mm" | "in" | "cm">("mm");
+  const [unit, setUnit] = useState<MeasurementUnit>("mm");
   const [customWidthMm, setCustomWidthMm] = useState(152.4);
   const [customHeightMm, setCustomHeightMm] = useState(228.6);
   const [widthInputStr, setWidthInputStr] = useState("152.4");
@@ -221,12 +240,6 @@ export function WriterView() {
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("USD");
 
-  const formatValForUnit = (mm: number, unit: "mm" | "in" | "cm"): string => {
-    if (unit === "in") return (mm / 25.4).toFixed(2);
-    if (unit === "cm") return (mm / 10).toFixed(2);
-    return mm.toFixed(1);
-  };
-
   const updateSelectedCustomSize = (wMm: number, hMm: number) => {
     setSelectedSize({
       name: "Custom Size",
@@ -236,10 +249,10 @@ export function WriterView() {
     });
   };
 
-  const handleUnitSwitch = (newUnit: "mm" | "in" | "cm") => {
-    setCustomUnit(newUnit);
-    setWidthInputStr(formatValForUnit(customWidthMm, newUnit));
-    setHeightInputStr(formatValForUnit(customHeightMm, newUnit));
+  const handleUnitSwitch = (newUnit: MeasurementUnit) => {
+    setUnit(newUnit);
+    setWidthInputStr(formatDim(customWidthMm, newUnit, false));
+    setHeightInputStr(formatDim(customHeightMm, newUnit, false));
   };
 
   const handleSelectPreset = (s: BookSize) => {
@@ -256,7 +269,7 @@ export function WriterView() {
     setWidthInputStr(valStr);
     const num = parseFloat(valStr);
     if (!isNaN(num) && num > 0) {
-      const mm = customUnit === "in" ? num * 25.4 : customUnit === "cm" ? num * 10 : num;
+      const mm = unit === "in" ? num * 25.4 : unit === "cm" ? num * 10 : num;
       setCustomWidthMm(mm);
       updateSelectedCustomSize(mm, customHeightMm);
     }
@@ -266,7 +279,7 @@ export function WriterView() {
     setHeightInputStr(valStr);
     const num = parseFloat(valStr);
     if (!isNaN(num) && num > 0) {
-      const mm = customUnit === "in" ? num * 25.4 : customUnit === "cm" ? num * 10 : num;
+      const mm = unit === "in" ? num * 25.4 : unit === "cm" ? num * 10 : num;
       setCustomHeightMm(mm);
       updateSelectedCustomSize(customWidthMm, mm);
     }
@@ -297,10 +310,11 @@ export function WriterView() {
       const spineRes = await api.get(`/api/writer-desk/spine?pageCount=${pageCount}&gsm=${gsm}&coverType=${coverType}`);
       setSpineWidth(spineRes.data.spineWidth);
 
-      // 2. Fetch template base64
+      // 2. Fetch template base64 (with selected unit)
       const templateRes = await api.post("/api/writer-desk/template", {
         trimWidth: selectedSize.w, trimHeight: selectedSize.h,
-        pageCount, paperGSM: gsm, coverType, bookTitle: title, authorName: author
+        pageCount, paperGSM: gsm, coverType, bookTitle: title, authorName: author,
+        unit
       });
       setTemplateUrl(templateRes.data.base64);
 
@@ -389,12 +403,33 @@ export function WriterView() {
               
               {/* Trim Dimensions Selection */}
               <Panel className="p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-sm sm:text-base font-semibold flex items-center gap-2 text-foreground">
-                    <Ruler className="w-4 h-4 text-gold" /> Book Trim Sizes
-                  </h2>
-                  <span className="text-xs text-muted-foreground">Standard publishing industry or custom dimensions</span>
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <div>
+                    <h2 className="text-sm sm:text-base font-semibold flex items-center gap-2 text-foreground">
+                      <Ruler className="w-4 h-4 text-gold" /> Book Trim Sizes
+                    </h2>
+                    <span className="text-xs text-muted-foreground">Standard publishing industry or custom dimensions</span>
+                  </div>
+
+                  {/* Measurement Unit Selector */}
+                  <div className="flex items-center gap-1 bg-secondary/80 p-0.5 rounded-md border border-border">
+                    {(['mm', 'in', 'cm'] as const).map(u => (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => handleUnitSwitch(u)}
+                        className={`px-3 py-1 rounded text-xs font-semibold transition-all ${
+                          unit === u 
+                            ? 'bg-gold text-black shadow-sm font-bold' 
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {u === 'in' ? 'inch' : u}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
                   {SIZES.map(s => {
                     const isSelected = !isCustomSize && selectedSize.name === s.name;
@@ -415,8 +450,12 @@ export function WriterView() {
                           </span>
                           {isSelected && <Check className="w-3.5 h-3.5 text-gold shrink-0 mt-0.5" />}
                         </div>
-                        <div className="text-[11px] text-muted-foreground font-mono mt-1">{s.inches}</div>
-                        <div className="text-[11px] text-muted-foreground font-mono">{s.w} × {s.h} mm</div>
+                        <div className="text-[11px] font-mono font-medium text-foreground mt-1">
+                          {formatDim(s.w, unit)} × {formatDim(s.h, unit)}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground font-mono">
+                          {unit === 'in' ? `${s.w} × ${s.h} mm` : s.inches}
+                        </div>
                       </button>
                     );
                   })}
@@ -437,11 +476,13 @@ export function WriterView() {
                       </span>
                       {isCustomSize && <Check className="w-3.5 h-3.5 text-gold shrink-0 mt-0.5" />}
                     </div>
-                    <div className="text-[11px] text-muted-foreground font-mono mt-1">
-                      {(customWidthMm / 25.4).toFixed(2)}" × {(customHeightMm / 25.4).toFixed(2)}"
+                    <div className="text-[11px] font-mono font-medium text-foreground mt-1">
+                      {formatDim(customWidthMm, unit)} × {formatDim(customHeightMm, unit)}
                     </div>
-                    <div className="text-[11px] text-muted-foreground font-mono">
-                      {customWidthMm.toFixed(1)} × {customHeightMm.toFixed(1)} mm
+                    <div className="text-[10px] text-muted-foreground font-mono">
+                      {unit === 'in' 
+                        ? `${customWidthMm.toFixed(1)} × ${customHeightMm.toFixed(1)} mm` 
+                        : `${(customWidthMm / 25.4).toFixed(2)}" × ${(customHeightMm / 25.4).toFixed(2)}"`}
                     </div>
                   </button>
                 </div>
@@ -453,26 +494,8 @@ export function WriterView() {
                       <div className="flex items-center gap-2">
                         <Sliders className="w-3.5 h-3.5 text-gold" />
                         <span className="text-xs font-semibold text-foreground">
-                          Custom Trim Dimensions
+                          Custom Trim Dimensions ({unit === 'in' ? 'Inches' : unit})
                         </span>
-                      </div>
-
-                      {/* Unit Selector: mm / in / cm */}
-                      <div className="flex items-center gap-1 bg-secondary/80 p-0.5 rounded-md border border-border">
-                        {(['mm', 'in', 'cm'] as const).map(u => (
-                          <button
-                            key={u}
-                            type="button"
-                            onClick={() => handleUnitSwitch(u)}
-                            className={`px-2.5 py-0.5 rounded text-[11px] font-semibold transition-all ${
-                              customUnit === u 
-                                ? 'bg-gold text-black shadow-sm font-bold' 
-                                : 'text-muted-foreground hover:text-foreground'
-                            }`}
-                          >
-                            {u === 'in' ? 'inch' : u}
-                          </button>
-                        ))}
                       </div>
                     </div>
 
@@ -480,12 +503,12 @@ export function WriterView() {
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="text-xs font-medium text-muted-foreground">
-                            Custom Width ({customUnit === 'in' ? 'Inches' : customUnit})
+                            Custom Width ({unit === 'in' ? 'Inches' : unit})
                           </label>
                           <span className="text-[10px] text-muted-foreground font-mono">
-                            {customUnit === 'mm' 
+                            {unit === 'mm' 
                               ? `≈ ${(customWidthMm / 25.4).toFixed(2)} in • ${(customWidthMm / 10).toFixed(2)} cm`
-                              : customUnit === 'in'
+                              : unit === 'in'
                                 ? `≈ ${customWidthMm.toFixed(1)} mm • ${(customWidthMm / 10).toFixed(2)} cm`
                                 : `≈ ${customWidthMm.toFixed(1)} mm • ${(customWidthMm / 25.4).toFixed(2)} in`}
                           </span>
@@ -493,16 +516,16 @@ export function WriterView() {
                         <div className="relative">
                           <input
                             type="number"
-                            min={customUnit === 'in' ? 2 : customUnit === 'cm' ? 5 : 50}
-                            max={customUnit === 'in' ? 20 : customUnit === 'cm' ? 50 : 500}
-                            step={customUnit === 'in' ? "0.05" : customUnit === 'cm' ? "0.1" : "0.5"}
+                            min={unit === 'in' ? 2 : unit === 'cm' ? 5 : 50}
+                            max={unit === 'in' ? 20 : unit === 'cm' ? 50 : 500}
+                            step={unit === 'in' ? "0.05" : unit === 'cm' ? "0.1" : "0.5"}
                             value={widthInputStr}
                             onChange={(e) => handleWidthInputChange(e.target.value)}
                             className="w-full bg-background border border-border rounded-md px-3 py-1.5 pr-12 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gold"
-                            placeholder={customUnit === 'in' ? "6.0" : customUnit === 'cm' ? "15.0" : "150"}
+                            placeholder={unit === 'in' ? "6.0" : unit === 'cm' ? "15.0" : "150"}
                           />
                           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gold font-mono font-semibold uppercase">
-                            {customUnit === 'in' ? 'in' : customUnit}
+                            {unit === 'in' ? 'in' : unit}
                           </span>
                         </div>
                       </div>
@@ -510,12 +533,12 @@ export function WriterView() {
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="text-xs font-medium text-muted-foreground">
-                            Custom Height ({customUnit === 'in' ? 'Inches' : customUnit})
+                            Custom Height ({unit === 'in' ? 'Inches' : unit})
                           </label>
                           <span className="text-[10px] text-muted-foreground font-mono">
-                            {customUnit === 'mm' 
+                            {unit === 'mm' 
                               ? `≈ ${(customHeightMm / 25.4).toFixed(2)} in • ${(customHeightMm / 10).toFixed(2)} cm`
-                              : customUnit === 'in'
+                              : unit === 'in'
                                 ? `≈ ${customHeightMm.toFixed(1)} mm • ${(customHeightMm / 10).toFixed(2)} cm`
                                 : `≈ ${customHeightMm.toFixed(1)} mm • ${(customHeightMm / 25.4).toFixed(2)} in`}
                           </span>
@@ -523,16 +546,16 @@ export function WriterView() {
                         <div className="relative">
                           <input
                             type="number"
-                            min={customUnit === 'in' ? 2 : customUnit === 'cm' ? 5 : 50}
-                            max={customUnit === 'in' ? 24 : customUnit === 'cm' ? 60 : 600}
-                            step={customUnit === 'in' ? "0.05" : customUnit === 'cm' ? "0.1" : "0.5"}
+                            min={unit === 'in' ? 2 : unit === 'cm' ? 5 : 50}
+                            max={unit === 'in' ? 24 : unit === 'cm' ? 60 : 600}
+                            step={unit === 'in' ? "0.05" : unit === 'cm' ? "0.1" : "0.5"}
                             value={heightInputStr}
                             onChange={(e) => handleHeightInputChange(e.target.value)}
                             className="w-full bg-background border border-border rounded-md px-3 py-1.5 pr-12 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gold"
-                            placeholder={customUnit === 'in' ? "9.0" : customUnit === 'cm' ? "22.0" : "220"}
+                            placeholder={unit === 'in' ? "9.0" : unit === 'cm' ? "22.0" : "220"}
                           />
                           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gold font-mono font-semibold uppercase">
-                            {customUnit === 'in' ? 'in' : customUnit}
+                            {unit === 'in' ? 'in' : unit}
                           </span>
                         </div>
                       </div>
@@ -693,21 +716,25 @@ export function WriterView() {
                   <div className="mb-4 rounded-lg bg-background/60 border border-border/80 p-3">
                     <p className="text-[11px] text-muted-foreground font-medium mb-2 flex items-center justify-between">
                       <span>Cover Blueprint Layout</span>
-                      <span className="text-[10px] text-gold font-mono">{totalCoverWidth} × {totalCoverHeight} mm</span>
+                      <span className="text-[10px] text-gold font-mono">
+                        {formatDim(parseFloat(totalCoverWidth), unit)} × {formatDim(parseFloat(totalCoverHeight), unit)}
+                      </span>
                     </p>
                     <div className="flex h-16 w-full rounded border border-dashed border-gold/50 overflow-hidden text-[10px] font-mono text-center">
-                      <div className="flex-1 bg-secondary/30 flex items-center justify-center border-r border-border text-muted-foreground">
-                        Back ({selectedSize.w}mm)
+                      <div className="flex-1 bg-secondary/30 flex items-center justify-center border-r border-border text-muted-foreground px-1">
+                        Back ({formatDim(selectedSize.w, unit)})
                       </div>
-                      <div className="w-14 bg-gold/20 flex flex-col items-center justify-center border-r border-border text-gold font-semibold px-0.5">
+                      <div className="w-16 bg-gold/20 flex flex-col items-center justify-center border-r border-border text-gold font-semibold px-0.5">
                         <span className="text-[9px]">Spine</span>
-                        <span>{estimatedSpine.toFixed(1)}mm</span>
+                        <span>{formatDim(estimatedSpine, unit)}</span>
                       </div>
-                      <div className="flex-1 bg-secondary/30 flex items-center justify-center text-muted-foreground">
-                        Front ({selectedSize.w}mm)
+                      <div className="flex-1 bg-secondary/30 flex items-center justify-center text-muted-foreground px-1">
+                        Front ({formatDim(selectedSize.w, unit)})
                       </div>
                     </div>
-                    <p className="text-[10px] text-muted-foreground/80 text-center mt-1.5">Includes standard 3mm bleed & 5mm safe zones</p>
+                    <p className="text-[10px] text-muted-foreground/80 text-center mt-1.5">
+                      Includes standard {formatDim(3, unit)} bleed & {formatDim(5, unit)} safe zones
+                    </p>
                   </div>
 
                   {/* Specs List */}
@@ -718,11 +745,15 @@ export function WriterView() {
                     </div>
                     <div className="flex justify-between items-center pt-2">
                       <span className="text-muted-foreground">Trim Dimensions</span>
-                      <span className="font-mono text-foreground">{selectedSize.w} × {selectedSize.h} mm</span>
+                      <span className="font-mono text-foreground">
+                        {formatDim(selectedSize.w, unit)} × {formatDim(selectedSize.h, unit)}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center pt-2">
                       <span className="text-muted-foreground">Spine Thickness</span>
-                      <span className="font-mono font-semibold text-gold">~{estimatedSpine.toFixed(2)} mm</span>
+                      <span className="font-mono font-semibold text-gold">
+                        ~{formatDim(estimatedSpine, unit)}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center pt-2">
                       <span className="text-muted-foreground">Binding Format</span>
@@ -771,7 +802,7 @@ export function WriterView() {
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">Specifications Calculated Successfully</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Spine is precisely <strong className="text-gold font-mono">{spineWidth} mm</strong>. Full canvas dimensions: <strong className="text-foreground font-mono">{totalCoverWidth} × {totalCoverHeight} mm</strong> (with 3mm bleed).
+                    Spine is precisely <strong className="text-gold font-mono">{formatDim(spineWidth || activeSpine, unit)}</strong>. Full canvas dimensions: <strong className="text-foreground font-mono">{formatDim(parseFloat(totalCoverWidth), unit)} × {formatDim(parseFloat(totalCoverHeight), unit)}</strong> (with {formatDim(3, unit)} bleed).
                   </p>
                 </div>
               </div>
@@ -797,7 +828,7 @@ export function WriterView() {
                   <span className="text-[10px] font-mono text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">Vector PDF</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">
-                  Full wraparound with exact {spineWidth}mm spine, 3mm outer bleed, and 5mm safe margins.
+                  Full wraparound with exact {formatDim(spineWidth || activeSpine, unit)} spine, {formatDim(3, unit)} outer bleed, and {formatDim(5, unit)} safe margins.
                 </p>
                 
                 <div className="flex-1 w-full bg-muted/30 border border-border rounded-md overflow-hidden mb-3 relative aspect-[4/3] min-h-[180px]">
@@ -897,7 +928,7 @@ export function WriterView() {
                   {trimBleed && (
                     <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full w-fit">
                       <Scissors className="size-3" />
-                      <span>Outer bleed trimmed ({bleedCutMm} mm chopped)</span>
+                      <span>Outer bleed trimmed ({formatDim(bleedCutMm, unit)} chopped)</span>
                     </div>
                   )}
                 </div>
@@ -939,8 +970,12 @@ export function WriterView() {
                     <span className="font-medium text-foreground">{selectedSize.name}</span>
                   </div>
                   <div className="flex justify-between items-center pt-2">
+                    <span className="text-muted-foreground">Trim Dimensions</span>
+                    <span className="font-mono text-foreground">{formatDim(selectedSize.w, unit)} × {formatDim(selectedSize.h, unit)}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
                     <span className="text-muted-foreground">Spine Width</span>
-                    <span className="font-mono font-semibold text-gold">{spineWidth || activeSpine} mm</span>
+                    <span className="font-mono font-semibold text-gold">{formatDim(spineWidth || activeSpine, unit)}</span>
                   </div>
                   <div className="flex justify-between items-center pt-2">
                     <span className="text-muted-foreground">Pages</span>
@@ -984,9 +1019,9 @@ export function WriterView() {
                       <span className="text-[11px] text-muted-foreground">Chop depth:</span>
                       <div className="flex items-center gap-1">
                         {[
-                          { label: "3 mm (Std)", val: 3 },
-                          { label: "5 mm (Wrap)", val: 5 },
-                          { label: "0 mm", val: 0 }
+                          { label: `${formatDim(3, unit)} (Std)`, val: 3 },
+                          { label: `${formatDim(5, unit)} (Wrap)`, val: 5 },
+                          { label: `0 ${unit}`, val: 0 }
                         ].map(p => (
                           <button
                             key={p.val}
