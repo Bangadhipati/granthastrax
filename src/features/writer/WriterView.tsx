@@ -8,6 +8,8 @@ import {
 import { AppShell } from "@/components/layout/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Panel } from "@/components/layout/Panel";
+import { Skeleton } from "@/components/ui/skeleton";
+import { WriterDeskSkeleton } from "@/components/ui/page-skeletons";
 import { api } from "@/lib/api";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -268,6 +270,7 @@ function BookViewer3D({
   const [isAutoRotating, setIsAutoRotating] = useState(false);
   const autoRotateRef = useRef(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [is3DReady, setIs3DReady] = useState(false);
 
   // Keep autoRotateRef in sync with state for requestAnimationFrame
   useEffect(() => {
@@ -496,6 +499,7 @@ function BookViewer3D({
       renderer.render(scene, camera);
     };
     animate();
+    setIs3DReady(true);
 
     // Use ResizeObserver for responsive resizing even during CSS transition/animation
     const resizeObserver = new ResizeObserver((entries) => {
@@ -671,6 +675,30 @@ function BookViewer3D({
         style={{ touchAction: 'none' }}
       />
 
+      {/* 3D Viewport Skeleton Overlay while WebGL / textures initialize */}
+      {!is3DReady && (
+        <div className="absolute inset-0 z-30 flex flex-col justify-between p-6 bg-surface/90 backdrop-blur-md skeleton-shimmer">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-6 w-36 rounded-full" variant="gold" glow />
+            <Skeleton className="h-6 w-24 rounded-full" variant="subtle" />
+          </div>
+          <div className="flex flex-col items-center justify-center my-auto py-8">
+            <div className="relative">
+              <Skeleton className="h-56 w-40 rounded-r-lg shadow-2xl" variant="gold" glow />
+              <div className="absolute -left-2.5 top-0 bottom-0 w-2.5 rounded-l bg-white/10" />
+            </div>
+            <Skeleton className="h-4 w-44 rounded-full mt-6" variant="subtle" />
+          </div>
+          <div className="flex items-center justify-between border-t border-border/40 pt-4">
+            <div className="flex gap-2">
+              <Skeleton className="size-8 rounded-full" variant="subtle" />
+              <Skeleton className="size-8 rounded-full" variant="subtle" />
+            </div>
+            <Skeleton className="h-8 w-28 rounded-md" variant="gold" />
+          </div>
+        </div>
+      )}
+
       {/* Top Floating Info: Status & Instructions */}
       <div className="absolute top-3 left-3 pointer-events-none flex items-center gap-2 bg-background/80 backdrop-blur-md border border-border/80 px-2.5 py-1 rounded-full text-[11px] font-medium text-muted-foreground shadow-xs">
         <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
@@ -791,6 +819,7 @@ function BookViewer3D({
 export function WriterView() {
   const [stage, setStage] = useState<1 | 2 | 3>(1);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Config State
   const defaultSize = SIZES[1] ?? { name: "Trade Paperback (US)", inches: '6" × 9"', w: 152.4, h: 228.6 };
@@ -811,6 +840,59 @@ export function WriterView() {
   const [isbn, setIsbn] = useState("");
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("USD");
+
+  // Restore saved config and provide smooth initial skeleton display
+  useEffect(() => {
+    let isMounted = true;
+    const init = async () => {
+      const startTime = Date.now();
+      try {
+        const saved = localStorage.getItem("granthastrax_writer_config");
+        if (saved) {
+          const cfg = JSON.parse(saved);
+          if (cfg.coverType) setCoverType(cfg.coverType);
+          if (cfg.gsm) setGsm(cfg.gsm);
+          if (cfg.pageCount) setPageCount(cfg.pageCount);
+          if (cfg.title) setTitle(cfg.title);
+          if (cfg.author) setAuthor(cfg.author);
+          if (cfg.isbn) setIsbn(cfg.isbn);
+          if (cfg.price) setPrice(cfg.price);
+          if (cfg.currency) setCurrency(cfg.currency);
+          if (cfg.unit) setUnit(cfg.unit);
+        }
+      } catch {} finally {
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 450) {
+          await new Promise((r) => setTimeout(r, 450 - elapsed));
+        }
+        if (isMounted) setIsInitializing(false);
+      }
+    };
+    init();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Save config on change
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "granthastrax_writer_config",
+        JSON.stringify({
+          coverType,
+          gsm,
+          pageCount,
+          title,
+          author,
+          isbn,
+          price,
+          currency,
+          unit
+        })
+      );
+    } catch {}
+  }, [coverType, gsm, pageCount, title, author, isbn, price, currency, unit]);
 
   const updateSelectedCustomSize = (wMm: number, hMm: number) => {
     setSelectedSize({
@@ -933,6 +1015,10 @@ export function WriterView() {
     };
     reader.readAsDataURL(file);
   };
+
+  if (isInitializing) {
+    return <WriterDeskSkeleton />;
+  }
 
   return (
     <AppShell>
