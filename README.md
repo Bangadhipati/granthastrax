@@ -133,12 +133,13 @@ A media engineering utility powered by Libvips:
 
 ### 3. Writer Desk (Interactive 3D Book Mockup & Lamination)
 
-<img width="2864" height="1536" alt="image" src="https://github.com/user-attachments/assets/7f51abf7-b476-44fa-9029-171d0f9f54b0" />
+<img width="2027" height="1078" alt="image" src="https://github.com/user-attachments/assets/215213e9-f59d-478c-b04c-7bc20cb1f8c8" />
 
 <br/>
 
 ### 4. Writer Desk (2D Blueprint & GS1 Bookland Barcode)
 
+<img width="2012" height="1402" alt="image" src="https://github.com/user-attachments/assets/e26f4131-be90-4571-8ada-552c49800d8d" />
 
 <br/>
 
